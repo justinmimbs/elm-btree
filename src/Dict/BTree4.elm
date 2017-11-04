@@ -4,7 +4,10 @@ module Dict.BTree4
         , empty
         , get
         , insert
+        , foldl
+        , foldr
         , fromList
+        , toList
         )
 
 {-| Order-4 B-tree (i.e. per node: max subnodes == 4, max keys == 3, min keys == 1)
@@ -280,6 +283,42 @@ insertHelp (( key, _ ) as pair) node =
 
 
 
+-- foldl
+
+
+foldl : (k -> v -> a -> a) -> a -> Node k v -> a
+foldl f result node =
+    case node of
+        Leaf ->
+            result
+
+        K1 a ( k1, v1 ) b ->
+            foldl f (f k1 v1 (foldl f result a)) b
+
+        K2 a ( k1, v1 ) b ( k2, v2 ) c ->
+            foldl f (f k2 v2 (foldl f (f k1 v1 (foldl f result a)) b)) c
+
+        K3 a ( k1, v1 ) b ( k2, v2 ) c ( k3, v3 ) d ->
+            foldl f (f k3 v3 (foldl f (f k2 v2 (foldl f (f k1 v1 (foldl f result a)) b)) c)) d
+
+
+foldr : (k -> v -> a -> a) -> a -> Node k v -> a
+foldr f result node =
+    case node of
+        Leaf ->
+            result
+
+        K1 a ( k1, v1 ) b ->
+            foldr f (f k1 v1 (foldr f result b)) a
+
+        K2 a ( k1, v1 ) b ( k2, v2 ) c ->
+            foldr f (f k1 v1 (foldr f (f k2 v2 (foldr f result c)) b)) a
+
+        K3 a ( k1, v1 ) b ( k2, v2 ) c ( k3, v3 ) d ->
+            foldr f (f k1 v1 (foldr f (f k2 v2 (foldr f (f k3 v3 (foldr f result d)) c)) b)) a
+
+
+
 -- to/from list
 
 
@@ -288,3 +327,8 @@ insertHelp (( key, _ ) as pair) node =
 fromList : List ( comparable, v ) -> Node comparable v
 fromList =
     List.foldl (uncurry insert) empty
+
+
+toList : Node k v -> List ( k, v )
+toList =
+    foldr (\k v -> (::) ( k, v )) []
