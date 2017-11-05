@@ -283,7 +283,7 @@ insertHelp (( key, _ ) as pair) node =
 
 
 
--- foldl
+-- fold
 
 
 foldl : (k -> v -> a -> a) -> a -> Node k v -> a
@@ -319,16 +319,131 @@ foldr f result node =
 
 
 
--- to/from list
-
-
-{-| Naive implementation; consider bulkloading
--}
-fromList : List ( comparable, v ) -> Node comparable v
-fromList =
-    List.foldl (uncurry insert) empty
+-- list
 
 
 toList : Node k v -> List ( k, v )
 toList =
     foldr (\k v -> (::) ( k, v )) []
+
+
+{-| build tree from the bottom up
+-}
+fromList : List ( comparable, v ) -> Node comparable v
+fromList =
+    List.sortBy Tuple.first >> deduplicate >> nodeListFromRevList >> fromNodeList
+
+
+{-| reverses list, last duplicate wins
+-}
+deduplicate : List ( comparable, v ) -> List ( comparable, v )
+deduplicate list =
+    case list of
+        x :: list ->
+            deduplicateHelp [] x list
+
+        [] ->
+            []
+
+
+deduplicateHelp : List ( comparable, v ) -> ( comparable, v ) -> List ( comparable, v ) -> List ( comparable, v )
+deduplicateHelp rev (( kx, _ ) as x) list =
+    case list of
+        (( ky, _ ) as y) :: rest ->
+            if kx == ky then
+                deduplicateHelp (rev) y rest
+            else
+                deduplicateHelp (x :: rev) y rest
+
+        [] ->
+            x :: rev
+
+
+type alias NodeList k v =
+    ( Node k v, List ( ( k, v ), Node k v ) )
+
+
+type alias NodeListRev k v =
+    ( List ( Node k v, ( k, v ) ), Node k v )
+
+
+nodeListFromRevList : List ( k, v ) -> NodeList k v
+nodeListFromRevList list =
+    case list of
+        [] ->
+            ( Leaf, [] )
+
+        x :: rest ->
+            nodeListFromRevListHelp [] x rest
+
+
+nodeListFromRevListHelp : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
+nodeListFromRevListHelp kn a list =
+    case list of
+        [] ->
+            ( K1 Leaf a Leaf, kn )
+
+        b :: [] ->
+            ( K2 Leaf b Leaf a Leaf, kn )
+
+        b :: c :: [] ->
+            ( K3 Leaf c Leaf b Leaf a Leaf, kn )
+
+        b :: c :: d :: [] ->
+            ( K1 Leaf d Leaf, ( c, K2 Leaf b Leaf a Leaf ) :: kn )
+
+        b :: c :: d :: e :: rest ->
+            nodeListFromRevListHelp (( d, K3 Leaf c Leaf b Leaf a Leaf ) :: kn) e rest
+
+
+fromNodeList : NodeList k v -> Node k v
+fromNodeList nkn =
+    case nkn of
+        ( node, [] ) ->
+            node
+
+        ( a, ( p1, b ) :: kn ) ->
+            case accumulateNodeList [] a p1 b kn of
+                ( [], node ) ->
+                    node
+
+                ( ( b2, p12 ) :: nk, a2 ) ->
+                    accumulateNodeListRev [] a2 p12 b2 nk |> fromNodeList
+
+
+accumulateNodeList : List ( Node k v, ( k, v ) ) -> Node k v -> ( k, v ) -> Node k v -> List ( ( k, v ), Node k v ) -> NodeListRev k v
+accumulateNodeList acc a p1 b kn =
+    case kn of
+        [] ->
+            ( acc, K1 a p1 b )
+
+        ( p2, c ) :: [] ->
+            ( acc, K2 a p1 b p2 c )
+
+        ( p2, c ) :: ( p3, d ) :: [] ->
+            ( acc, K3 a p1 b p2 c p3 d )
+
+        ( p2, c ) :: ( p3, d ) :: ( p4, e ) :: [] ->
+            ( ( K2 a p1 b p2 c, p3 ) :: acc, K1 d p4 e )
+
+        ( p2, c ) :: ( p3, d ) :: ( p4, e ) :: ( p5, f ) :: kn2 ->
+            accumulateNodeList (( K3 a p1 b p2 c p3 d, p4 ) :: acc) e p5 f kn2
+
+
+accumulateNodeListRev : List ( ( k, v ), Node k v ) -> Node k v -> ( k, v ) -> Node k v -> List ( Node k v, ( k, v ) ) -> NodeList k v
+accumulateNodeListRev acc a p1 b nk =
+    case nk of
+        [] ->
+            ( K1 b p1 a, acc )
+
+        ( c, p2 ) :: [] ->
+            ( K2 c p2 b p1 a, acc )
+
+        ( c, p2 ) :: ( d, p3 ) :: [] ->
+            ( K3 d p3 c p2 b p1 a, acc )
+
+        ( c, p2 ) :: ( d, p3 ) :: ( e, p4 ) :: [] ->
+            ( K1 e p4 d, ( p3, K2 c p2 b p1 a ) :: acc )
+
+        ( c, p2 ) :: ( d, p3 ) :: ( e, p4 ) :: ( f, p5 ) :: nk2 ->
+            accumulateNodeListRev (( p4, K3 d p3 c p2 b p1 a ) :: acc) e p5 f nk2
