@@ -331,7 +331,7 @@ toList =
 -}
 fromList : List ( comparable, v ) -> Node comparable v
 fromList =
-    List.sortBy Tuple.first >> deduplicate >> nodeListFromRevList >> fromNodeList
+    List.sortBy Tuple.first >> deduplicate >> pairsToNodeList >> fromNodeList False
 
 
 {-| reverses list, last duplicate wins
@@ -347,103 +347,90 @@ deduplicate list =
 
 
 deduplicateHelp : List ( comparable, v ) -> ( comparable, v ) -> List ( comparable, v ) -> List ( comparable, v )
-deduplicateHelp rev (( kx, _ ) as x) list =
+deduplicateHelp revList (( key, _ ) as pair) list =
     case list of
-        (( ky, _ ) as y) :: rest ->
-            if kx == ky then
-                deduplicateHelp (rev) y rest
+        (( nextKey, _ ) as nextPair) :: rest ->
+            if key == nextKey then
+                deduplicateHelp (revList) nextPair rest
             else
-                deduplicateHelp (x :: rev) y rest
+                deduplicateHelp (pair :: revList) nextPair rest
 
         [] ->
-            x :: rev
+            pair :: revList
 
 
 type alias NodeList k v =
     ( Node k v, List ( ( k, v ), Node k v ) )
 
 
-type alias NodeListRev k v =
-    ( List ( Node k v, ( k, v ) ), Node k v )
-
-
-nodeListFromRevList : List ( k, v ) -> NodeList k v
-nodeListFromRevList list =
+pairsToNodeList : List ( k, v ) -> NodeList k v
+pairsToNodeList list =
     case list of
         [] ->
             ( Leaf, [] )
 
         x :: rest ->
-            nodeListFromRevListHelp [] x rest
+            pairsToNodeListHelp [] x rest
 
 
-nodeListFromRevListHelp : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
-nodeListFromRevListHelp kn a list =
+pairsToNodeListHelp : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
+pairsToNodeListHelp revList a list =
     case list of
         [] ->
-            ( K1 Leaf a Leaf, kn )
+            ( K1 Leaf a Leaf, revList )
 
         b :: [] ->
-            ( K2 Leaf b Leaf a Leaf, kn )
+            ( K2 Leaf b Leaf a Leaf, revList )
 
         b :: c :: [] ->
-            ( K3 Leaf c Leaf b Leaf a Leaf, kn )
+            ( K3 Leaf c Leaf b Leaf a Leaf, revList )
 
         b :: c :: d :: [] ->
-            ( K1 Leaf d Leaf, ( c, K2 Leaf b Leaf a Leaf ) :: kn )
+            ( K1 Leaf d Leaf, ( c, K2 Leaf b Leaf a Leaf ) :: revList )
 
         b :: c :: d :: e :: rest ->
-            nodeListFromRevListHelp (( d, K3 Leaf c Leaf b Leaf a Leaf ) :: kn) e rest
+            pairsToNodeListHelp (( d, K3 Leaf c Leaf b Leaf a Leaf ) :: revList) e rest
 
 
-fromNodeList : NodeList k v -> Node k v
-fromNodeList nkn =
-    case nkn of
+fromNodeList : Bool -> NodeList k v -> Node k v
+fromNodeList isReversed nodeList =
+    case nodeList of
         ( node, [] ) ->
             node
 
-        ( a, ( p1, b ) :: kn ) ->
-            case accumulateNodeList [] a p1 b kn of
-                ( [], node ) ->
-                    node
-
-                ( ( b2, p12 ) :: nk, a2 ) ->
-                    accumulateNodeListRev [] a2 p12 b2 nk |> fromNodeList
+        ( a, ( p1, b ) :: list ) ->
+            accumulateNodeList isReversed [] a p1 b list |> fromNodeList (not isReversed)
 
 
-accumulateNodeList : List ( Node k v, ( k, v ) ) -> Node k v -> ( k, v ) -> Node k v -> List ( ( k, v ), Node k v ) -> NodeListRev k v
-accumulateNodeList acc a p1 b kn =
-    case kn of
+accumulateNodeList : Bool -> List ( ( k, v ), Node k v ) -> Node k v -> ( k, v ) -> Node k v -> List ( ( k, v ), Node k v ) -> NodeList k v
+accumulateNodeList isReversed revList a p1 b list =
+    case list of
         [] ->
-            ( acc, K1 a p1 b )
+            if isReversed then
+                ( K1 b p1 a, revList )
+            else
+                ( K1 a p1 b, revList )
 
         ( p2, c ) :: [] ->
-            ( acc, K2 a p1 b p2 c )
+            if isReversed then
+                ( K2 c p2 b p1 a, revList )
+            else
+                ( K2 a p1 b p2 c, revList )
 
         ( p2, c ) :: ( p3, d ) :: [] ->
-            ( acc, K3 a p1 b p2 c p3 d )
+            if isReversed then
+                ( K3 d p3 c p2 b p1 a, revList )
+            else
+                ( K3 a p1 b p2 c p3 d, revList )
 
         ( p2, c ) :: ( p3, d ) :: ( p4, e ) :: [] ->
-            ( ( K2 a p1 b p2 c, p3 ) :: acc, K1 d p4 e )
+            if isReversed then
+                ( K1 e p4 d, ( p3, K2 c p2 b p1 a ) :: revList )
+            else
+                ( K1 d p4 e, ( p3, K2 a p1 b p2 c ) :: revList )
 
-        ( p2, c ) :: ( p3, d ) :: ( p4, e ) :: ( p5, f ) :: kn2 ->
-            accumulateNodeList (( K3 a p1 b p2 c p3 d, p4 ) :: acc) e p5 f kn2
-
-
-accumulateNodeListRev : List ( ( k, v ), Node k v ) -> Node k v -> ( k, v ) -> Node k v -> List ( Node k v, ( k, v ) ) -> NodeList k v
-accumulateNodeListRev acc a p1 b nk =
-    case nk of
-        [] ->
-            ( K1 b p1 a, acc )
-
-        ( c, p2 ) :: [] ->
-            ( K2 c p2 b p1 a, acc )
-
-        ( c, p2 ) :: ( d, p3 ) :: [] ->
-            ( K3 d p3 c p2 b p1 a, acc )
-
-        ( c, p2 ) :: ( d, p3 ) :: ( e, p4 ) :: [] ->
-            ( K1 e p4 d, ( p3, K2 c p2 b p1 a ) :: acc )
-
-        ( c, p2 ) :: ( d, p3 ) :: ( e, p4 ) :: ( f, p5 ) :: nk2 ->
-            accumulateNodeListRev (( p4, K3 d p3 c p2 b p1 a ) :: acc) e p5 f nk2
+        ( p2, c ) :: ( p3, d ) :: ( p4, e ) :: ( p5, f ) :: rest ->
+            if isReversed then
+                accumulateNodeList isReversed (( p4, K3 d p3 c p2 b p1 a ) :: revList) e p5 f rest
+            else
+                accumulateNodeList isReversed (( p4, K3 a p1 b p2 c p3 d ) :: revList) e p5 f rest
