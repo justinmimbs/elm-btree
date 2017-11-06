@@ -38,15 +38,15 @@ tests =
 
 
 duplicates =
-    K1 (K2 Leaf ( 'a', 'a' ) Leaf ( 'b', 'b' ) Leaf) ( 'c', 'c' ) (K2 Leaf ( 'c', 'c' ) Leaf ( 'd', 'd' ) Leaf)
+    N2 (N3 Leaf ( 'a', 'a' ) Leaf ( 'b', 'b' ) Leaf) ( 'c', 'c' ) (N3 Leaf ( 'c', 'c' ) Leaf ( 'd', 'd' ) Leaf)
 
 
 unordered =
-    K1 (K2 Leaf ( 'a', 'a' ) Leaf ( 'b', 'b' ) Leaf) ( 'c', 'c' ) (K2 Leaf ( 'e', 'e' ) Leaf ( 'd', 'd' ) Leaf)
+    N2 (N3 Leaf ( 'a', 'a' ) Leaf ( 'b', 'b' ) Leaf) ( 'c', 'c' ) (N3 Leaf ( 'e', 'e' ) Leaf ( 'd', 'd' ) Leaf)
 
 
 uneven =
-    K1 (K2 Leaf ( 'a', 'a' ) Leaf ( 'b', 'b' ) Leaf) ( 'c', 'c' ) (K2 Leaf ( 'd', 'd' ) (K1 Leaf ( 'e', 'e' ) Leaf) ( 'f', 'f' ) Leaf)
+    N2 (N3 Leaf ( 'a', 'a' ) Leaf ( 'b', 'b' ) Leaf) ( 'c', 'c' ) (N3 Leaf ( 'd', 'd' ) (N2 Leaf ( 'e', 'e' ) Leaf) ( 'f', 'f' ) Leaf)
 
 
 
@@ -74,18 +74,18 @@ areLeavesAtSameDepth node =
         Leaf ->
             True
 
-        K1 a _ b ->
+        N2 a _ b ->
             (depthLeft a == depthLeft b)
                 && areLeavesAtSameDepth a
                 && areLeavesAtSameDepth b
 
-        K2 a _ b _ c ->
+        N3 a _ b _ c ->
             (List.repeat 2 (depthLeft a) == [ depthLeft b, depthLeft c ])
                 && areLeavesAtSameDepth a
                 && areLeavesAtSameDepth b
                 && areLeavesAtSameDepth c
 
-        K3 a _ b _ c _ d ->
+        N4 a _ b _ c _ d ->
             (List.repeat 3 (depthLeft a) == [ depthLeft b, depthLeft c, depthLeft d ])
                 && areLeavesAtSameDepth a
                 && areLeavesAtSameDepth b
@@ -99,13 +99,13 @@ depthLeft node =
         Leaf ->
             0
 
-        K1 a _ _ ->
+        N2 a _ _ ->
             1 + depthLeft a
 
-        K2 a _ _ _ _ ->
+        N3 a _ _ _ _ ->
             1 + depthLeft a
 
-        K3 a _ _ _ _ _ _ ->
+        N4 a _ _ _ _ _ _ ->
             1 + depthLeft a
 
 

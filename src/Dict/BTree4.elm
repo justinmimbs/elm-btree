@@ -16,9 +16,9 @@ module Dict.BTree4
 
 type Node k v
     = Leaf
-    | K1 (Node k v) ( k, v ) (Node k v)
-    | K2 (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
-    | K3 (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
+    | N2 (Node k v) ( k, v ) (Node k v)
+    | N3 (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
+    | N4 (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
 
 
 empty : Node k v
@@ -32,7 +32,7 @@ get key node =
         Leaf ->
             Nothing
 
-        K1 a ( k1, v1 ) b ->
+        N2 a ( k1, v1 ) b ->
             if key < k1 then
                 get key a
             else if key > k1 then
@@ -40,7 +40,7 @@ get key node =
             else
                 Just v1
 
-        K2 a ( k1, v1 ) b ( k2, v2 ) c ->
+        N3 a ( k1, v1 ) b ( k2, v2 ) c ->
             if key < k2 then
                 if key < k1 then
                     get key a
@@ -53,7 +53,7 @@ get key node =
             else
                 Just v2
 
-        K3 a ( k1, v1 ) b ( k2, v2 ) c ( k3, v3 ) d ->
+        N4 a ( k1, v1 ) b ( k2, v2 ) c ( k3, v3 ) d ->
             if key < k2 then
                 if key < k1 then
                     get key a
@@ -78,24 +78,24 @@ type UnzippedNode k v
 
 
 type NodeContext k v
-    = K1A ( k, v ) (Node k v)
-    | K1B (Node k v) ( k, v )
-    | K2A ( k, v ) (Node k v) ( k, v ) (Node k v)
-    | K2B (Node k v) ( k, v ) ( k, v ) (Node k v)
-    | K2C (Node k v) ( k, v ) (Node k v) ( k, v )
-    | K3A ( k, v ) (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
-    | K3B (Node k v) ( k, v ) ( k, v ) (Node k v) ( k, v ) (Node k v)
-    | K3C (Node k v) ( k, v ) (Node k v) ( k, v ) ( k, v ) (Node k v)
-    | K3D (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v) ( k, v )
+    = N2A ( k, v ) (Node k v)
+    | N2B (Node k v) ( k, v )
+    | N3A ( k, v ) (Node k v) ( k, v ) (Node k v)
+    | N3B (Node k v) ( k, v ) ( k, v ) (Node k v)
+    | N3C (Node k v) ( k, v ) (Node k v) ( k, v )
+    | N4A ( k, v ) (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
+    | N4B (Node k v) ( k, v ) ( k, v ) (Node k v) ( k, v ) (Node k v)
+    | N4C (Node k v) ( k, v ) (Node k v) ( k, v ) ( k, v ) (Node k v)
+    | N4D (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v) ( k, v )
 
 
 type KeyContext k v
-    = K1P1 (Node k v) (Node k v)
-    | K2P1 (Node k v) (Node k v) ( k, v ) (Node k v)
-    | K2P2 (Node k v) ( k, v ) (Node k v) (Node k v)
-    | K3P1 (Node k v) (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
-    | K3P2 (Node k v) ( k, v ) (Node k v) (Node k v) ( k, v ) (Node k v)
-    | K3P3 (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v) (Node k v)
+    = N2P1 (Node k v) (Node k v)
+    | N3P1 (Node k v) (Node k v) ( k, v ) (Node k v)
+    | N3P2 (Node k v) ( k, v ) (Node k v) (Node k v)
+    | N4P1 (Node k v) (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
+    | N4P2 (Node k v) ( k, v ) (Node k v) (Node k v) ( k, v ) (Node k v)
+    | N4P3 (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v) (Node k v)
 
 
 seek : comparable -> Node comparable v -> Maybe (UnzippedNode comparable v)
@@ -104,103 +104,103 @@ seek key node =
         Leaf ->
             Nothing
 
-        K1 a (( k1, _ ) as p1) b ->
+        N2 a (( k1, _ ) as p1) b ->
             Just
                 (if key < k1 then
-                    NodeLoc a (K1A p1 b)
+                    NodeLoc a (N2A p1 b)
                  else if key > k1 then
-                    NodeLoc b (K1B a p1)
+                    NodeLoc b (N2B a p1)
                  else
-                    KeyLoc p1 (K1P1 a b)
+                    KeyLoc p1 (N2P1 a b)
                 )
 
-        K2 a (( k1, _ ) as p1) b (( k2, _ ) as p2) c ->
+        N3 a (( k1, _ ) as p1) b (( k2, _ ) as p2) c ->
             Just
                 (if key < k2 then
                     if key < k1 then
-                        NodeLoc a (K2A p1 b p2 c)
+                        NodeLoc a (N3A p1 b p2 c)
                     else if key > k1 then
-                        NodeLoc b (K2B a p1 p2 c)
+                        NodeLoc b (N3B a p1 p2 c)
                     else
-                        KeyLoc p1 (K2P1 a b p2 c)
+                        KeyLoc p1 (N3P1 a b p2 c)
                  else if key > k2 then
-                    NodeLoc c (K2C a p1 b p2)
+                    NodeLoc c (N3C a p1 b p2)
                  else
-                    KeyLoc p2 (K2P2 a p1 b c)
+                    KeyLoc p2 (N3P2 a p1 b c)
                 )
 
-        K3 a (( k1, _ ) as p1) b (( k2, _ ) as p2) c (( k3, _ ) as p3) d ->
+        N4 a (( k1, _ ) as p1) b (( k2, _ ) as p2) c (( k3, _ ) as p3) d ->
             Just
                 (if key < k2 then
                     if key < k1 then
-                        NodeLoc a (K3A p1 b p2 c p3 d)
+                        NodeLoc a (N4A p1 b p2 c p3 d)
                     else if key > k1 then
-                        NodeLoc b (K3B a p1 p2 c p3 d)
+                        NodeLoc b (N4B a p1 p2 c p3 d)
                     else
-                        KeyLoc p1 (K3P1 a b p2 c p3 d)
+                        KeyLoc p1 (N4P1 a b p2 c p3 d)
                  else if key > k2 then
                     if key < k3 then
-                        NodeLoc c (K3C a p1 b p2 p3 d)
+                        NodeLoc c (N4C a p1 b p2 p3 d)
                     else if key > k3 then
-                        NodeLoc d (K3D a p1 b p2 c p3)
+                        NodeLoc d (N4D a p1 b p2 c p3)
                     else
-                        KeyLoc p3 (K3P3 a p1 b p2 c d)
+                        KeyLoc p3 (N4P3 a p1 b p2 c d)
                  else
-                    KeyLoc p2 (K3P2 a p1 b c p3 d)
+                    KeyLoc p2 (N4P2 a p1 b c p3 d)
                 )
 
 
 zipNodeLoc : Node k v -> NodeContext k v -> Node k v
 zipNodeLoc node nodeContext =
     case nodeContext of
-        K1A p1 b ->
-            K1 node p1 b
+        N2A p1 b ->
+            N2 node p1 b
 
-        K1B a p1 ->
-            K1 a p1 node
+        N2B a p1 ->
+            N2 a p1 node
 
-        K2A p1 b p2 c ->
-            K2 node p1 b p2 c
+        N3A p1 b p2 c ->
+            N3 node p1 b p2 c
 
-        K2B a p1 p2 c ->
-            K2 a p1 node p2 c
+        N3B a p1 p2 c ->
+            N3 a p1 node p2 c
 
-        K2C a p1 b p2 ->
-            K2 a p1 b p2 node
+        N3C a p1 b p2 ->
+            N3 a p1 b p2 node
 
-        K3A p1 b p2 c p3 d ->
-            K3 node p1 b p2 c p3 d
+        N4A p1 b p2 c p3 d ->
+            N4 node p1 b p2 c p3 d
 
-        K3B a p1 p2 c p3 d ->
-            K3 a p1 node p2 c p3 d
+        N4B a p1 p2 c p3 d ->
+            N4 a p1 node p2 c p3 d
 
-        K3C a p1 b p2 p3 d ->
-            K3 a p1 b p2 node p3 d
+        N4C a p1 b p2 p3 d ->
+            N4 a p1 b p2 node p3 d
 
-        K3D a p1 b p2 c p3 ->
-            K3 a p1 b p2 c p3 node
+        N4D a p1 b p2 c p3 ->
+            N4 a p1 b p2 c p3 node
 
 
 zipKeyLoc : ( k, v ) -> KeyContext k v -> Node k v
 zipKeyLoc pair keyContext =
     case keyContext of
-        K1P1 a b ->
-            K1 a pair b
+        N2P1 a b ->
+            N2 a pair b
 
-        K2P1 a b p2 c ->
-            K2 a pair b p2 c
+        N3P1 a b p2 c ->
+            N3 a pair b p2 c
 
-        K2P2 a p1 b c ->
-            K2 a p1 b pair c
+        N3P2 a p1 b c ->
+            N3 a p1 b pair c
 
-        K3P1 a b p2 c p3 d ->
-            K3 a pair b p2 c p3 d
+        N4P1 a b p2 c p3 d ->
+            N4 a pair b p2 c p3 d
 
-        K3P2 a p1 b c p3 d ->
-            K3 a p1 b pair c p3 d
+        N4P2 a p1 b c p3 d ->
+            N4 a p1 b pair c p3 d
 
-        K3P3 a p1 b p2 c d ->
-            K3 a p1 b p2 c pair d
+        N4P3 a p1 b p2 c d ->
+            N4 a p1 b p2 c pair d
 
 
 type NodeResult k v
@@ -217,32 +217,32 @@ zipNodeResult nodeContext nodeResult =
 
         Split left pair right ->
             case nodeContext of
-                K1A p1 b ->
-                    Balanced (K2 left pair right p1 b)
+                N2A p1 b ->
+                    Balanced (N3 left pair right p1 b)
 
-                K1B a p1 ->
-                    Balanced (K2 a p1 left pair right)
+                N2B a p1 ->
+                    Balanced (N3 a p1 left pair right)
 
-                K2A p1 b p2 c ->
-                    Balanced (K3 left pair right p1 b p2 c)
+                N3A p1 b p2 c ->
+                    Balanced (N4 left pair right p1 b p2 c)
 
-                K2B a p1 p2 c ->
-                    Balanced (K3 a p1 left pair right p2 c)
+                N3B a p1 p2 c ->
+                    Balanced (N4 a p1 left pair right p2 c)
 
-                K2C a p1 b p2 ->
-                    Balanced (K3 a p1 b p2 left pair right)
+                N3C a p1 b p2 ->
+                    Balanced (N4 a p1 b p2 left pair right)
 
-                K3A p1 b p2 c p3 d ->
-                    Split (K2 left pair right p1 b) p2 (K1 c p3 d)
+                N4A p1 b p2 c p3 d ->
+                    Split (N3 left pair right p1 b) p2 (N2 c p3 d)
 
-                K3B a p1 p2 c p3 d ->
-                    Split (K2 a p1 left pair right) p2 (K1 c p3 d)
+                N4B a p1 p2 c p3 d ->
+                    Split (N3 a p1 left pair right) p2 (N2 c p3 d)
 
-                K3C a p1 b p2 p3 d ->
-                    Split (K2 a p1 b p2 left) pair (K1 right p3 d)
+                N4C a p1 b p2 p3 d ->
+                    Split (N3 a p1 b p2 left) pair (N2 right p3 d)
 
-                K3D a p1 b p2 c p3 ->
-                    Split (K2 a p1 b p2 c) p3 (K1 left pair right)
+                N4D a p1 b p2 c p3 ->
+                    Split (N3 a p1 b p2 c) p3 (N2 left pair right)
 
         Underfull n ->
             Debug.crash "underfull"
@@ -257,7 +257,7 @@ nodeResultToRoot nodeResult =
 
         Split l p r ->
             -- increases depth
-            K1 l p r
+            N2 l p r
 
         Underfull n ->
             -- decreases depth
@@ -292,13 +292,13 @@ foldl f result node =
         Leaf ->
             result
 
-        K1 a ( k1, v1 ) b ->
+        N2 a ( k1, v1 ) b ->
             foldl f (f k1 v1 (foldl f result a)) b
 
-        K2 a ( k1, v1 ) b ( k2, v2 ) c ->
+        N3 a ( k1, v1 ) b ( k2, v2 ) c ->
             foldl f (f k2 v2 (foldl f (f k1 v1 (foldl f result a)) b)) c
 
-        K3 a ( k1, v1 ) b ( k2, v2 ) c ( k3, v3 ) d ->
+        N4 a ( k1, v1 ) b ( k2, v2 ) c ( k3, v3 ) d ->
             foldl f (f k3 v3 (foldl f (f k2 v2 (foldl f (f k1 v1 (foldl f result a)) b)) c)) d
 
 
@@ -308,13 +308,13 @@ foldr f result node =
         Leaf ->
             result
 
-        K1 a ( k1, v1 ) b ->
+        N2 a ( k1, v1 ) b ->
             foldr f (f k1 v1 (foldr f result b)) a
 
-        K2 a ( k1, v1 ) b ( k2, v2 ) c ->
+        N3 a ( k1, v1 ) b ( k2, v2 ) c ->
             foldr f (f k1 v1 (foldr f (f k2 v2 (foldr f result c)) b)) a
 
-        K3 a ( k1, v1 ) b ( k2, v2 ) c ( k3, v3 ) d ->
+        N4 a ( k1, v1 ) b ( k2, v2 ) c ( k3, v3 ) d ->
             foldr f (f k1 v1 (foldr f (f k2 v2 (foldr f (f k3 v3 (foldr f result d)) c)) b)) a
 
 
@@ -377,19 +377,19 @@ pairsToNodeListHelp : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -
 pairsToNodeListHelp revList a list =
     case list of
         [] ->
-            ( K1 Leaf a Leaf, revList )
+            ( N2 Leaf a Leaf, revList )
 
         b :: [] ->
-            ( K2 Leaf b Leaf a Leaf, revList )
+            ( N3 Leaf b Leaf a Leaf, revList )
 
         b :: c :: [] ->
-            ( K3 Leaf c Leaf b Leaf a Leaf, revList )
+            ( N4 Leaf c Leaf b Leaf a Leaf, revList )
 
         b :: c :: d :: [] ->
-            ( K1 Leaf d Leaf, ( c, K2 Leaf b Leaf a Leaf ) :: revList )
+            ( N2 Leaf d Leaf, ( c, N3 Leaf b Leaf a Leaf ) :: revList )
 
         b :: c :: d :: e :: rest ->
-            pairsToNodeListHelp (( d, K3 Leaf c Leaf b Leaf a Leaf ) :: revList) e rest
+            pairsToNodeListHelp (( d, N4 Leaf c Leaf b Leaf a Leaf ) :: revList) e rest
 
 
 fromNodeList : Bool -> NodeList k v -> Node k v
@@ -407,30 +407,30 @@ accumulateNodeList isReversed revList a p1 b list =
     case list of
         [] ->
             if isReversed then
-                ( K1 b p1 a, revList )
+                ( N2 b p1 a, revList )
             else
-                ( K1 a p1 b, revList )
+                ( N2 a p1 b, revList )
 
         ( p2, c ) :: [] ->
             if isReversed then
-                ( K2 c p2 b p1 a, revList )
+                ( N3 c p2 b p1 a, revList )
             else
-                ( K2 a p1 b p2 c, revList )
+                ( N3 a p1 b p2 c, revList )
 
         ( p2, c ) :: ( p3, d ) :: [] ->
             if isReversed then
-                ( K3 d p3 c p2 b p1 a, revList )
+                ( N4 d p3 c p2 b p1 a, revList )
             else
-                ( K3 a p1 b p2 c p3 d, revList )
+                ( N4 a p1 b p2 c p3 d, revList )
 
         ( p2, c ) :: ( p3, d ) :: ( p4, e ) :: [] ->
             if isReversed then
-                ( K1 e p4 d, ( p3, K2 c p2 b p1 a ) :: revList )
+                ( N2 e p4 d, ( p3, N3 c p2 b p1 a ) :: revList )
             else
-                ( K1 d p4 e, ( p3, K2 a p1 b p2 c ) :: revList )
+                ( N2 d p4 e, ( p3, N3 a p1 b p2 c ) :: revList )
 
         ( p2, c ) :: ( p3, d ) :: ( p4, e ) :: ( p5, f ) :: rest ->
             if isReversed then
-                accumulateNodeList isReversed (( p4, K3 d p3 c p2 b p1 a ) :: revList) e p5 f rest
+                accumulateNodeList isReversed (( p4, N4 d p3 c p2 b p1 a ) :: revList) e p5 f rest
             else
-                accumulateNodeList isReversed (( p4, K3 a p1 b p2 c p3 d ) :: revList) e p5 f rest
+                accumulateNodeList isReversed (( p4, N4 a p1 b p2 c p3 d ) :: revList) e p5 f rest
