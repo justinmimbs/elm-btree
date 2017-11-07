@@ -1,7 +1,7 @@
 module Example4 exposing (..)
 
 import Char
-import Dict.BTree4 as Dict2 exposing (Node(..))
+import Dict.BTree4 as Dict exposing (Node(..))
 
 
 letters =
@@ -14,22 +14,41 @@ list =
 
 
 ex1 =
-    Dict2.fromList list
+    Dict.fromList list
+
+
+ex2 =
+    List.range -100 100
+        |> List.map (\n -> ( n, toString n ))
+        |> Dict.fromList
+
+
+ex3 =
+    List.foldl
+        Dict.remove
+        ex2
+        [ -34, 9, -89, -100, 100, 27, -3, 45, 46, 47, 48 ]
 
 
 getValuesFromEx1 =
     String.toList ("0123456789" ++ letters ++ " ")
-        |> List.filterMap (\c -> Dict2.get c ex1)
+        |> List.filterMap (\c -> Dict.get c ex1)
         |> String.fromList
 
 
 tests =
     [ getValuesFromEx1 == String.toLower letters
-    , Dict2.toList ex1 == List.sortBy Tuple.first list
+    , Dict.toList ex1 == List.sortBy Tuple.first list
     , not (areKeysOrdered duplicates)
     , not (areKeysOrdered unordered)
     , not (areLeavesAtSameDepth uneven)
     , isValid ex1
+    , isValid ex2
+    , isValid ex3
+    , Dict.size ex2 == 201
+    , Dict.size ex3 == 190
+    , Dict.get 27 ex2 == Just "27"
+    , Dict.get 27 ex3 == Nothing
     ]
 
 
@@ -63,7 +82,7 @@ isValid node =
 -}
 areKeysOrdered : Node comparable v -> Bool
 areKeysOrdered =
-    Dict2.foldl (\key1 _ ( mKey0, ordered ) -> ( Just key1, ordered && unwrap True ((>) key1) mKey0 )) ( Nothing, True ) >> Tuple.second
+    Dict.foldl (\key1 _ ( mKey0, ordered ) -> ( Just key1, ordered && unwrap True ((>) key1) mKey0 )) ( Nothing, True ) >> Tuple.second
 
 
 {-| (2) all leaves are stored at the same depth
