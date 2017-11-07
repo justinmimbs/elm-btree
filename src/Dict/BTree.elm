@@ -1,646 +1,890 @@
 module Dict.BTree
     exposing
-        ( empty
+        ( Node(..)
+        , empty
+        , singleton
+        , isEmpty
+        , size
         , get
+        , member
         , insert
         , remove
+        , update
+        , map
         , foldl
+        , foldr
+        , keys
+        , values
         , fromList
         , toList
-        , size
-          -- for validation only
-        , maxKeys
-        , minKeys
-        , Node(..)
         )
+
+{-| Order-4 B-tree
+-}
 
 
 type Node k v
-    = Leaf (List ( k, v ))
-    | NonLeaf (Node k v) (List ( k, v, Node k v ))
+    = Leaf
+    | N2 (Node k v) ( k, v ) (Node k v)
+    | N3 (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
+    | N4 (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
 
 
-{-| maxKeys == maxNodes - 1
--}
-maxKeys : Int
-maxKeys =
-    4
-
-
-minKeys : Int
-minKeys =
-    maxKeys // 2
-
-
-empty : Node comparable v
+empty : Node k v
 empty =
-    Leaf []
+    Leaf
+
+
+singleton : comparable -> v -> Node comparable v
+singleton key val =
+    N2 Leaf ( key, val ) Leaf
+
+
+isEmpty : Node k v -> Bool
+isEmpty =
+    (==) Leaf
+
+
+size : Node k v -> Int
+size node =
+    case node of
+        Leaf ->
+            0
+
+        N2 a _ b ->
+            1 + size a + size b
+
+        N3 a _ b _ c ->
+            2 + size a + size b + size c
+
+        N4 a _ b _ c _ d ->
+            3 + size a + size b + size c + size d
+
+
+
+-- get
 
 
 get : comparable -> Node comparable v -> Maybe v
 get key node =
     case node of
-        Leaf list ->
-            getFromLeaf key list
-
-        NonLeaf n kn ->
-            getFromNonLeaf key n kn
-
-
-{-| assumes ordered list
--}
-getFromLeaf : comparable -> List ( comparable, v ) -> Maybe v
-getFromLeaf key list =
-    case list of
-        ( k, v ) :: list2 ->
-            if key > k then
-                getFromLeaf key list2
-            else if key == k then
-                Just v
-            else
-                Nothing
-
-        [] ->
+        Leaf ->
             Nothing
 
-
-{-| assumes ordered list
--}
-getFromNonLeaf : comparable -> Node comparable v -> List ( comparable, v, Node comparable v ) -> Maybe v
-getFromNonLeaf key n kn =
-    case kn of
-        ( k, v, n2 ) :: kn2 ->
-            if key > k then
-                getFromNonLeaf key n2 kn2
-            else if key == k then
-                Just v
+        N2 a ( k1, v1 ) b ->
+            if key < k1 then
+                get key a
+            else if key > k1 then
+                get key b
             else
-                get key n
+                Just v1
 
-        [] ->
-            get key n
+        N3 a ( k1, v1 ) b ( k2, v2 ) c ->
+            if key < k2 then
+                if key < k1 then
+                    get key a
+                else if key > k1 then
+                    get key b
+                else
+                    Just v1
+            else if key > k2 then
+                get key c
+            else
+                Just v2
+
+        N4 a ( k1, v1 ) b ( k2, v2 ) c ( k3, v3 ) d ->
+            if key < k2 then
+                if key < k1 then
+                    get key a
+                else if key > k1 then
+                    get key b
+                else
+                    Just v1
+            else if key > k2 then
+                if key < k3 then
+                    get key c
+                else if key > k3 then
+                    get key d
+                else
+                    Just v3
+            else
+                Just v2
 
 
-type InsertResult k v
-    = NoSplit (Node k v)
-    | Split (Node k v) k v (Node k v)
+
+-- member
+
+
+member : comparable -> Node comparable v -> Bool
+member key node =
+    case get key node of
+        Just _ ->
+            True
+
+        Nothing ->
+            False
+
+
+
+-- zipping
+
+
+{-| Represents the location of a specific subnode or key within a node.
+-}
+type UnzippedNode k v
+    = NodeLoc (Node k v) (NodeContext k v)
+    | KeyLoc ( k, v ) (KeyContext k v)
+
+
+type NodeContext k v
+    = N2A ( k, v ) (Node k v)
+    | N2B (Node k v) ( k, v )
+    | N3A ( k, v ) (Node k v) ( k, v ) (Node k v)
+    | N3B (Node k v) ( k, v ) ( k, v ) (Node k v)
+    | N3C (Node k v) ( k, v ) (Node k v) ( k, v )
+    | N4A ( k, v ) (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
+    | N4B (Node k v) ( k, v ) ( k, v ) (Node k v) ( k, v ) (Node k v)
+    | N4C (Node k v) ( k, v ) (Node k v) ( k, v ) ( k, v ) (Node k v)
+    | N4D (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v) ( k, v )
+
+
+type KeyContext k v
+    = N2P1 (Node k v) (Node k v)
+    | N3P1 (Node k v) (Node k v) ( k, v ) (Node k v)
+    | N3P2 (Node k v) ( k, v ) (Node k v) (Node k v)
+    | N4P1 (Node k v) (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
+    | N4P2 (Node k v) ( k, v ) (Node k v) (Node k v) ( k, v ) (Node k v)
+    | N4P3 (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v) (Node k v)
+
+
+seek : comparable -> Node comparable v -> Maybe (UnzippedNode comparable v)
+seek key node =
+    case node of
+        Leaf ->
+            Nothing
+
+        N2 a (( k1, _ ) as p1) b ->
+            Just
+                (if key < k1 then
+                    NodeLoc a (N2A p1 b)
+                 else if key > k1 then
+                    NodeLoc b (N2B a p1)
+                 else
+                    KeyLoc p1 (N2P1 a b)
+                )
+
+        N3 a (( k1, _ ) as p1) b (( k2, _ ) as p2) c ->
+            Just
+                (if key < k2 then
+                    if key < k1 then
+                        NodeLoc a (N3A p1 b p2 c)
+                    else if key > k1 then
+                        NodeLoc b (N3B a p1 p2 c)
+                    else
+                        KeyLoc p1 (N3P1 a b p2 c)
+                 else if key > k2 then
+                    NodeLoc c (N3C a p1 b p2)
+                 else
+                    KeyLoc p2 (N3P2 a p1 b c)
+                )
+
+        N4 a (( k1, _ ) as p1) b (( k2, _ ) as p2) c (( k3, _ ) as p3) d ->
+            Just
+                (if key < k2 then
+                    if key < k1 then
+                        NodeLoc a (N4A p1 b p2 c p3 d)
+                    else if key > k1 then
+                        NodeLoc b (N4B a p1 p2 c p3 d)
+                    else
+                        KeyLoc p1 (N4P1 a b p2 c p3 d)
+                 else if key > k2 then
+                    if key < k3 then
+                        NodeLoc c (N4C a p1 b p2 p3 d)
+                    else if key > k3 then
+                        NodeLoc d (N4D a p1 b p2 c p3)
+                    else
+                        KeyLoc p3 (N4P3 a p1 b p2 c d)
+                 else
+                    KeyLoc p2 (N4P2 a p1 b c p3 d)
+                )
+
+
+zipNodeLoc : Node k v -> NodeContext k v -> Node k v
+zipNodeLoc node nodeContext =
+    case nodeContext of
+        N2A p1 b ->
+            N2 node p1 b
+
+        N2B a p1 ->
+            N2 a p1 node
+
+        N3A p1 b p2 c ->
+            N3 node p1 b p2 c
+
+        N3B a p1 p2 c ->
+            N3 a p1 node p2 c
+
+        N3C a p1 b p2 ->
+            N3 a p1 b p2 node
+
+        N4A p1 b p2 c p3 d ->
+            N4 node p1 b p2 c p3 d
+
+        N4B a p1 p2 c p3 d ->
+            N4 a p1 node p2 c p3 d
+
+        N4C a p1 b p2 p3 d ->
+            N4 a p1 b p2 node p3 d
+
+        N4D a p1 b p2 c p3 ->
+            N4 a p1 b p2 c p3 node
+
+
+zipKeyLoc : ( k, v ) -> KeyContext k v -> Node k v
+zipKeyLoc pair keyContext =
+    case keyContext of
+        N2P1 a b ->
+            N2 a pair b
+
+        N3P1 a b p2 c ->
+            N3 a pair b p2 c
+
+        N3P2 a p1 b c ->
+            N3 a p1 b pair c
+
+        N4P1 a b p2 c p3 d ->
+            N4 a pair b p2 c p3 d
+
+        N4P2 a p1 b c p3 d ->
+            N4 a p1 b pair c p3 d
+
+        N4P3 a p1 b p2 c d ->
+            N4 a p1 b p2 c pair d
+
+
+{-| Represents the possible outcomes of modifying a node.
+-}
+type NodeResult k v
+    = Balanced (Node k v)
+    | Split (Node k v) ( k, v ) (Node k v)
+    | Underfull (Node k v)
+
+
+{-| This is the only function that changes the depth of the tree; it's to be
+used only at the root.
+-}
+fromNodeResult : NodeResult k v -> Node k v
+fromNodeResult nodeResult =
+    case nodeResult of
+        Balanced n ->
+            -- maintains depth
+            n
+
+        Split l p r ->
+            -- increases depth
+            N2 l p r
+
+        Underfull n ->
+            -- decreases depth
+            n
+
+
+type RebalanceResult k v
+    = Rotated (Node k v) ( k, v ) (Node k v)
+    | Merged (Node k v)
+
+
+rotateLeft : Node k v -> ( k, v ) -> Node k v -> RebalanceResult k v
+rotateLeft subnode pair right =
+    case right of
+        Leaf ->
+            Merged Leaf
+
+        N2 a p1 b ->
+            Merged (N3 subnode pair a p1 b)
+
+        N3 a p1 b p2 c ->
+            Rotated (N2 subnode pair a) p1 (N2 b p2 c)
+
+        N4 a p1 b p2 c p3 d ->
+            Rotated (N2 subnode pair a) p1 (N3 b p2 c p3 d)
+
+
+rotateRight : Node k v -> ( k, v ) -> Node k v -> RebalanceResult k v
+rotateRight left pair subnode =
+    case left of
+        Leaf ->
+            Merged Leaf
+
+        N2 a p1 b ->
+            Merged (N3 a p1 b pair subnode)
+
+        N3 a p1 b p2 c ->
+            Rotated (N2 a p1 b) p2 (N2 c pair subnode)
+
+        N4 a p1 b p2 c p3 d ->
+            Rotated (N3 a p1 b p2 c) p3 (N2 d pair subnode)
+
+
+zipNodeResult : NodeContext comparable v -> NodeResult comparable v -> NodeResult comparable v
+zipNodeResult nodeContext nodeResult =
+    case nodeResult of
+        Balanced node ->
+            Balanced (zipNodeLoc node nodeContext)
+
+        Split left pair right ->
+            case nodeContext of
+                N2A p1 b ->
+                    Balanced (N3 left pair right p1 b)
+
+                N2B a p1 ->
+                    Balanced (N3 a p1 left pair right)
+
+                N3A p1 b p2 c ->
+                    Balanced (N4 left pair right p1 b p2 c)
+
+                N3B a p1 p2 c ->
+                    Balanced (N4 a p1 left pair right p2 c)
+
+                N3C a p1 b p2 ->
+                    Balanced (N4 a p1 b p2 left pair right)
+
+                N4A p1 b p2 c p3 d ->
+                    Split (N3 left pair right p1 b) p2 (N2 c p3 d)
+
+                N4B a p1 p2 c p3 d ->
+                    Split (N3 a p1 left pair right) p2 (N2 c p3 d)
+
+                N4C a p1 b p2 p3 d ->
+                    Split (N3 a p1 b p2 left) pair (N2 right p3 d)
+
+                N4D a p1 b p2 c p3 ->
+                    Split (N3 a p1 b p2 c) p3 (N2 left pair right)
+
+        Underfull subnode ->
+            case nodeContext of
+                N2A p1 b ->
+                    -- leftmost
+                    case rotateLeft subnode p1 b of
+                        Rotated newA newP1 newB ->
+                            Balanced (N2 newA newP1 newB)
+
+                        Merged ab ->
+                            Underfull ab
+
+                N2B a p1 ->
+                    -- rightmost
+                    case rotateRight a p1 subnode of
+                        Rotated newA newP1 newB ->
+                            Balanced (N2 newA newP1 newB)
+
+                        Merged ab ->
+                            Underfull ab
+
+                N3A p1 b p2 c ->
+                    -- leftmost
+                    case rotateLeft subnode p1 b of
+                        Rotated newA newP1 newB ->
+                            Balanced (N3 newA newP1 newB p2 c)
+
+                        Merged ab ->
+                            Balanced (N2 ab p2 c)
+
+                N3B a p1 p2 c ->
+                    -- middle
+                    case rotateLeft subnode p2 c of
+                        Rotated newB newP2 newC ->
+                            Balanced (N3 a p1 newB newP2 newC)
+
+                        _ ->
+                            case rotateRight a p1 subnode of
+                                Rotated newA newP1 newB ->
+                                    Balanced (N3 newA newP1 newB p2 c)
+
+                                Merged ab ->
+                                    Balanced (N2 ab p2 c)
+
+                N3C a p1 b p2 ->
+                    -- rightmost
+                    case rotateRight b p2 subnode of
+                        Rotated newB newP2 newC ->
+                            Balanced (N3 a p1 newB newP2 newC)
+
+                        Merged bc ->
+                            Balanced (N2 a p1 bc)
+
+                N4A p1 b p2 c p3 d ->
+                    -- leftmost
+                    case rotateLeft subnode p1 b of
+                        Rotated newA newP1 newB ->
+                            Balanced (N4 newA newP1 newB p2 c p3 d)
+
+                        Merged ab ->
+                            Balanced (N3 ab p2 c p3 d)
+
+                N4B a p1 p2 c p3 d ->
+                    -- middle
+                    case rotateLeft subnode p2 c of
+                        Rotated newB newP2 newC ->
+                            Balanced (N4 a p1 newB newP2 newC p3 d)
+
+                        _ ->
+                            case rotateRight a p1 subnode of
+                                Rotated newA newP1 newB ->
+                                    Balanced (N4 newA newP1 newB p2 c p3 d)
+
+                                Merged ab ->
+                                    Balanced (N3 ab p2 c p3 d)
+
+                N4C a p1 b p2 p3 d ->
+                    -- middle
+                    case rotateLeft subnode p3 d of
+                        Rotated newC newP3 newD ->
+                            Balanced (N4 a p1 b p2 newC newP3 newD)
+
+                        _ ->
+                            case rotateRight b p2 subnode of
+                                Rotated newB newP2 newC ->
+                                    Balanced (N4 a p1 newB newP2 newC p3 d)
+
+                                Merged bc ->
+                                    Balanced (N3 a p1 bc p3 d)
+
+                N4D a p1 b p2 c p3 ->
+                    -- rightmost
+                    case rotateRight c p3 subnode of
+                        Rotated newC newP3 newD ->
+                            Balanced (N4 a p1 b p2 newC newP3 newD)
+
+                        Merged cd ->
+                            Balanced (N3 a p1 b p2 cd)
+
+
+zipWithoutKey : KeyContext comparable v -> NodeResult comparable v
+zipWithoutKey keyContext =
+    case keyContext of
+        N2P1 a b ->
+            case findReplacementKey a b of
+                Rotated newA newP1 newB ->
+                    Balanced (N2 newA newP1 newB)
+
+                Merged ab ->
+                    Underfull ab
+
+        N3P1 a b p2 c ->
+            case findReplacementKey a b of
+                Rotated newA newP1 newB ->
+                    Balanced (N3 newA newP1 newB p2 c)
+
+                Merged ab ->
+                    Balanced (N2 ab p2 c)
+
+        N3P2 a p1 b c ->
+            case findReplacementKey b c of
+                Rotated newB newP2 newC ->
+                    Balanced (N3 a p1 newB newP2 newC)
+
+                Merged bc ->
+                    Balanced (N2 a p1 bc)
+
+        N4P1 a b p2 c p3 d ->
+            case findReplacementKey a b of
+                Rotated newA newP1 newB ->
+                    Balanced (N4 newA newP1 newB p2 c p3 d)
+
+                Merged ab ->
+                    Balanced (N3 ab p2 c p3 d)
+
+        N4P2 a p1 b c p3 d ->
+            case findReplacementKey b c of
+                Rotated newB newP2 newC ->
+                    Balanced (N4 a p1 newB newP2 newC p3 d)
+
+                Merged bc ->
+                    Balanced (N3 a p1 bc p3 d)
+
+        N4P3 a p1 b p2 c d ->
+            case findReplacementKey c d of
+                Rotated newC newP3 newD ->
+                    Balanced (N4 a p1 b p2 newC newP3 newD)
+
+                Merged cd ->
+                    Balanced (N3 a p1 b p2 cd)
+
+
+findReplacementKey : Node comparable v -> Node comparable v -> RebalanceResult comparable v
+findReplacementKey left right =
+    case borrowSmallest right of
+        Just ( pair, newRight ) ->
+            Rotated left pair newRight
+
+        Nothing ->
+            case borrowLargest left of
+                Just ( newLeft, pair ) ->
+                    Rotated newLeft pair right
+
+                Nothing ->
+                    case getSmallest Nothing right of
+                        Just (( key, _ ) as pair) ->
+                            case removeHelp key right of
+                                Balanced newRight ->
+                                    Rotated left pair newRight
+
+                                Underfull rightSubnode ->
+                                    rotateRight left pair rightSubnode
+
+                                Split _ _ _ ->
+                                    Debug.crash "remove can't result in a split"
+
+                        Nothing ->
+                            Merged Leaf
+
+
+borrowSmallest : Node k v -> Maybe ( ( k, v ), Node k v )
+borrowSmallest node =
+    case node of
+        Leaf ->
+            Nothing
+
+        N2 a p1 b ->
+            if a == Leaf then
+                Nothing
+            else
+                borrowSmallest a |> Maybe.map (\( smallest, aNew ) -> ( smallest, N2 aNew p1 b ))
+
+        N3 a p1 b p2 c ->
+            if a == Leaf then
+                Just ( p1, N2 Leaf p2 Leaf )
+            else
+                borrowSmallest a |> Maybe.map (\( smallest, aNew ) -> ( smallest, N3 aNew p1 b p2 c ))
+
+        N4 a p1 b p2 c p3 d ->
+            if a == Leaf then
+                Just ( p1, N3 Leaf p2 Leaf p3 Leaf )
+            else
+                borrowSmallest a |> Maybe.map (\( smallest, aNew ) -> ( smallest, N4 aNew p1 b p2 c p3 d ))
+
+
+borrowLargest : Node k v -> Maybe ( Node k v, ( k, v ) )
+borrowLargest node =
+    case node of
+        Leaf ->
+            Nothing
+
+        N2 a p1 b ->
+            if b == Leaf then
+                Nothing
+            else
+                borrowLargest b |> Maybe.map (\( bNew, largest ) -> ( N2 a p1 bNew, largest ))
+
+        N3 a p1 b p2 c ->
+            if c == Leaf then
+                Just ( N2 Leaf p1 Leaf, p2 )
+            else
+                borrowLargest c |> Maybe.map (\( cNew, largest ) -> ( N3 a p1 b p2 cNew, largest ))
+
+        N4 a p1 b p2 c p3 d ->
+            if d == Leaf then
+                Just ( N3 Leaf p1 Leaf p2 Leaf, p3 )
+            else
+                borrowLargest d |> Maybe.map (\( dNew, largest ) -> ( N4 a p1 b p2 c p3 dNew, largest ))
+
+
+getSmallest : Maybe ( k, v ) -> Node k v -> Maybe ( k, v )
+getSmallest smallest node =
+    case node of
+        Leaf ->
+            smallest
+
+        N2 a p1 _ ->
+            getSmallest (Just p1) a
+
+        N3 a p1 _ _ _ ->
+            getSmallest (Just p1) a
+
+        N4 a p1 _ _ _ _ _ ->
+            getSmallest (Just p1) a
+
+
+
+-- insert
 
 
 insert : comparable -> v -> Node comparable v -> Node comparable v
-insert key val node =
-    case insertHelp key val node of
-        NoSplit inserted ->
-            inserted
-
-        Split left k v right ->
-            NonLeaf left [ ( k, v, right ) ]
+insert key val =
+    insertHelp ( key, val ) >> fromNodeResult
 
 
-insertHelp : comparable -> v -> Node comparable v -> InsertResult comparable v
-insertHelp key val node =
-    case node of
-        Leaf list ->
-            let
-                list2 =
-                    insertIntoLeaf key val list
-            in
-                if List.length list2 <= maxKeys then
-                    NoSplit (Leaf list2)
-                else
-                    case bisect list2 of
-                        ( llist, ( k, v ) :: rlist ) ->
-                            Split (Leaf llist) k v (Leaf rlist)
+insertHelp : ( comparable, v ) -> Node comparable v -> NodeResult comparable v
+insertHelp (( key, _ ) as pair) node =
+    case seek key node of
+        Nothing ->
+            Split Leaf pair Leaf
 
-                        _ ->
-                            NoSplit (Leaf list2)
+        Just loc ->
+            case loc of
+                NodeLoc subnode nodeContext ->
+                    zipNodeResult nodeContext (insertHelp pair subnode)
 
-        NonLeaf n kn ->
-            let
-                ( n2, kn2 ) =
-                    insertIntoNonLeaf key val [] n kn
-            in
-                if List.length kn2 <= maxKeys then
-                    NoSplit (NonLeaf n2 kn2)
-                else
-                    case bisect kn2 of
-                        ( lkn, ( k, v, r ) :: rkn ) ->
-                            Split (NonLeaf n2 lkn) k v (NonLeaf r rkn)
-
-                        _ ->
-                            NoSplit (NonLeaf n2 kn2)
-
-
-insertIntoLeaf : comparable -> v -> List ( comparable, v ) -> List ( comparable, v )
-insertIntoLeaf key val list =
-    case list of
-        (( k, _ ) as kv) :: rest ->
-            if key > k then
-                kv :: insertIntoLeaf key val rest
-            else if k == key then
-                ( key, val ) :: rest
-            else
-                ( key, val ) :: list
-
-        [] ->
-            ( key, val ) :: []
-
-
-insertIntoNonLeaf : comparable -> v -> NKList comparable v -> Node comparable v -> KNList comparable v -> NKNList comparable v
-insertIntoNonLeaf key val nk n kn =
-    case kn of
-        ( k, v, n2 ) :: kn2 ->
-            if key > k then
-                -- keep unzipping
-                insertIntoNonLeaf key val (( n, k, v ) :: nk) n2 kn2
-            else if key == k then
-                -- replace split-key
-                zipNKNList nk n (( key, val, n2 ) :: kn2)
-            else
-                insertIntoNonLeafAtNode key val nk n kn
-
-        [] ->
-            insertIntoNonLeafAtNode key val nk n []
-
-
-insertIntoNonLeafAtNode : comparable -> v -> NKList comparable v -> Node comparable v -> KNList comparable v -> NKNList comparable v
-insertIntoNonLeafAtNode key val nk n kn =
-    case insertHelp key val n of
-        NoSplit n2 ->
-            zipNKNList nk n2 kn
-
-        Split l k v r ->
-            zipNKNList nk l (( k, v, r ) :: kn)
-
-
-
--- type aliases (NKN == a list of nodes separated by keys)
-
-
-type alias KNList k v =
-    List ( k, v, Node k v )
-
-
-type alias NKNList k v =
-    ( Node k v, List ( k, v, Node k v ) )
-
-
-type alias NKList k v =
-    List ( Node k v, k, v )
-
-
-zipNKNList : NKList comparable v -> Node comparable v -> KNList comparable v -> NKNList comparable v
-zipNKNList nk n kn =
-    case nk of
-        [] ->
-            ( n, kn )
-
-        ( n2, k, v ) :: nk2 ->
-            zipNKNList nk2 n2 (( k, v, n ) :: kn)
-
-
-fromNKNList : NKNList comparable v -> Node comparable v
-fromNKNList =
-    uncurry NonLeaf
+                KeyLoc _ keyContext ->
+                    Balanced (zipKeyLoc pair keyContext)
 
 
 
 -- remove
 
 
-{-| -}
 remove : comparable -> Node comparable v -> Node comparable v
-remove key node =
-    case removeHelp key node of
-        NonLeaf subnode [] ->
-            -- decrease depth when the result has only one node
-            subnode
-
-        node2 ->
-            node2
+remove key =
+    removeHelp key >> fromNodeResult
 
 
-{-| resulting node may be underfull, but children will be balanced; the output will have the same depth as the input
--}
-removeHelp : comparable -> Node comparable v -> Node comparable v
+removeHelp : comparable -> Node comparable v -> NodeResult comparable v
 removeHelp key node =
+    case seek key node of
+        Nothing ->
+            Balanced node
+
+        Just loc ->
+            case loc of
+                NodeLoc subnode nodeContext ->
+                    zipNodeResult nodeContext (removeHelp key subnode)
+
+                KeyLoc _ keyContext ->
+                    zipWithoutKey keyContext
+
+
+
+-- update
+
+
+update : comparable -> (Maybe v -> Maybe v) -> Node comparable v -> Node comparable v
+update key f =
+    updateHelp key f >> fromNodeResult
+
+
+updateHelp : comparable -> (Maybe v -> Maybe v) -> Node comparable v -> NodeResult comparable v
+updateHelp key f node =
+    case seek key node of
+        Nothing ->
+            case f Nothing of
+                Just val ->
+                    Split Leaf ( key, val ) Leaf
+
+                Nothing ->
+                    Balanced node
+
+        Just loc ->
+            case loc of
+                NodeLoc subnode nodeContext ->
+                    zipNodeResult nodeContext (updateHelp key f subnode)
+
+                KeyLoc ( _, val ) keyContext ->
+                    case f (Just val) of
+                        Just newVal ->
+                            Balanced (zipKeyLoc ( key, newVal ) keyContext)
+
+                        Nothing ->
+                            zipWithoutKey keyContext
+
+
+
+-- map
+
+
+map : (k -> a -> b) -> Node k a -> Node k b
+map f node =
     case node of
-        Leaf list ->
-            Leaf (removeFromLeaf key list)
+        Leaf ->
+            Leaf
 
-        NonLeaf n kn ->
-            fromNKNList (removeFromNonLeaf key [] n kn)
+        N2 a ( k1, v1 ) b ->
+            N2 (map f a) ( k1, f k1 v1 ) (map f b)
+
+        N3 a ( k1, v1 ) b ( k2, v2 ) c ->
+            N3 (map f a) ( k1, f k1 v1 ) (map f b) ( k2, f k2 v2 ) (map f c)
+
+        N4 a ( k1, v1 ) b ( k2, v2 ) c ( k3, v3 ) d ->
+            N4 (map f a) ( k1, f k1 v1 ) (map f b) ( k2, f k2 v2 ) (map f c) ( k3, f k3 v3 ) (map f d)
 
 
-{-| resulting list may be underfull
+
+-- fold
+
+
+foldl : (k -> v -> a -> a) -> a -> Node k v -> a
+foldl f result node =
+    case node of
+        Leaf ->
+            result
+
+        N2 a ( k1, v1 ) b ->
+            foldl f (f k1 v1 (foldl f result a)) b
+
+        N3 a ( k1, v1 ) b ( k2, v2 ) c ->
+            foldl f (f k2 v2 (foldl f (f k1 v1 (foldl f result a)) b)) c
+
+        N4 a ( k1, v1 ) b ( k2, v2 ) c ( k3, v3 ) d ->
+            foldl f (f k3 v3 (foldl f (f k2 v2 (foldl f (f k1 v1 (foldl f result a)) b)) c)) d
+
+
+foldr : (k -> v -> a -> a) -> a -> Node k v -> a
+foldr f result node =
+    case node of
+        Leaf ->
+            result
+
+        N2 a ( k1, v1 ) b ->
+            foldr f (f k1 v1 (foldr f result b)) a
+
+        N3 a ( k1, v1 ) b ( k2, v2 ) c ->
+            foldr f (f k1 v1 (foldr f (f k2 v2 (foldr f result c)) b)) a
+
+        N4 a ( k1, v1 ) b ( k2, v2 ) c ( k3, v3 ) d ->
+            foldr f (f k1 v1 (foldr f (f k2 v2 (foldr f (f k3 v3 (foldr f result d)) c)) b)) a
+
+
+{-| Alternate foldr whose function argument takes a key-value tuple.
 -}
-removeFromLeaf : comparable -> List ( comparable, v ) -> List ( comparable, v )
-removeFromLeaf key list =
+foldr_ : (( k, v ) -> a -> a) -> a -> Node k v -> a
+foldr_ f result node =
+    case node of
+        Leaf ->
+            result
+
+        N2 a p1 b ->
+            foldr_ f (f p1 (foldr_ f result b)) a
+
+        N3 a p1 b p2 c ->
+            foldr_ f (f p1 (foldr_ f (f p2 (foldr_ f result c)) b)) a
+
+        N4 a p1 b p2 c p3 d ->
+            foldr_ f (f p1 (foldr_ f (f p2 (foldr_ f (f p3 (foldr_ f result d)) c)) b)) a
+
+
+
+-- list
+
+
+keys : Node k v -> List k
+keys =
+    foldr (\k _ -> (::) k) []
+
+
+values : Node k v -> List v
+values =
+    foldr (\_ v -> (::) v) []
+
+
+toList : Node k v -> List ( k, v )
+toList =
+    foldr_ (::) []
+
+
+{-| Builds tree from the bottom up.
+-}
+fromList : List ( comparable, v ) -> Node comparable v
+fromList =
+    List.sortBy Tuple.first >> deduplicate >> pairsToNodeList >> fromNodeList False
+
+
+{-| Reverses list; last duplicate wins.
+-}
+deduplicate : List ( comparable, v ) -> List ( comparable, v )
+deduplicate list =
     case list of
-        (( k, _ ) as kv) :: rest ->
-            if key > k then
-                kv :: removeFromLeaf key rest
-            else if key == k then
-                rest
-            else
-                list
+        x :: list ->
+            deduplicateHelp [] x list
 
         [] ->
             []
 
 
-{-| resulting list may be underfull, but children will be balanced
--}
-removeFromNonLeaf : comparable -> NKList comparable v -> Node comparable v -> KNList comparable v -> NKNList comparable v
-removeFromNonLeaf key nk n kn =
-    case kn of
-        ( k, v, n2 ) :: kn2 ->
-            if key > k then
-                -- keep unzipping
-                removeFromNonLeaf key (( n, k, v ) :: nk) n2 kn2
-            else if key == k then
-                -- remove split-key
-                replaceSplitKey nk n n2 kn2
-            else
-                -- descend into node (leftmost or middle)
-                rebalance nk (removeHelp key n) kn
-
-        [] ->
-            -- descend into node (rightmost)
-            rebalance nk (removeHelp key n) []
-
-
-{-| need siblings to rebalance a deficient node
--}
-rebalance : NKList comparable v -> Node comparable v -> KNList comparable v -> NKNList comparable v
-rebalance nk n kn =
-    if keysInNode n >= minKeys then
-        -- already balanced
-        zipNKNList nk n kn
-    else
-        -- rebalance
-        case ( nk, kn ) of
-            ( ( l, lk, lv ) :: nk2, ( rk, rv, r ) :: kn2 ) ->
-                -- central
-                borrowFromRight nk n rk rv r kn2
-                    |> orElseLazy (\() -> borrowFromLeft nk2 l lk lv n kn)
-                    |> withDefaultLazy (\() -> mergeNodes nk2 l lk lv n kn)
-
-            ( [], ( rk, rv, r ) :: kn2 ) ->
-                -- leftmost
-                borrowFromRight [] n rk rv r kn2
-                    |> withDefaultLazy (\() -> mergeNodes [] n rk rv r kn2)
-
-            ( ( l, lk, lv ) :: nk2, [] ) ->
-                -- rightmost
-                borrowFromLeft nk2 l lk lv n []
-                    |> withDefaultLazy (\() -> mergeNodes nk2 l lk lv n [])
-
-            ( [], [] ) ->
-                -- singleton
-                ( n, [] )
-
-
-keysInNode : Node comparable v -> Int
-keysInNode node =
-    case node of
-        Leaf list ->
-            List.length list
-
-        NonLeaf _ kn ->
-            List.length kn
-
-
-{-| rotate left
--}
-borrowFromRight : NKList comparable v -> Node comparable v -> comparable -> v -> Node comparable v -> KNList comparable v -> Maybe (NKNList comparable v)
-borrowFromRight nk l k v r kn =
-    (case ( l, r ) of
-        ( Leaf llist, Leaf (( rk, rv ) :: rlist2) ) ->
-            if List.length rlist2 >= minKeys then
-                Just ( Leaf (llist ++ [ ( k, v ) ]), rk, rv, Leaf rlist2 )
-            else
-                Nothing
-
-        ( NonLeaf ln lkn, NonLeaf rn (( rk, rv, rn2 ) :: rkn2) ) ->
-            if List.length rkn2 >= minKeys then
-                Just ( NonLeaf ln (lkn ++ [ ( k, v, rn ) ]), rk, rv, NonLeaf rn2 rkn2 )
-            else
-                Nothing
-
-        _ ->
-            Nothing
-    )
-        -- reassemble
-        |> Maybe.map (\( l2, k2, v2, r2 ) -> zipNKNList nk l2 (( k2, v2, r2 ) :: kn))
-
-
-{-| rotate right
--}
-borrowFromLeft : NKList comparable v -> Node comparable v -> comparable -> v -> Node comparable v -> KNList comparable v -> Maybe (NKNList comparable v)
-borrowFromLeft nk l k v r kn =
-    (case ( l, r ) of
-        ( Leaf llist, Leaf rlist ) ->
-            if List.length llist > minKeys then
-                popLast llist
-                    |> Maybe.map
-                        (\( llist2, ( lk, lv ) ) ->
-                            ( Leaf llist2, lk, lv, Leaf (( k, v ) :: rlist) )
-                        )
-            else
-                Nothing
-
-        ( NonLeaf ln lkn, NonLeaf rn rkn ) ->
-            if List.length lkn > minKeys then
-                popLast lkn
-                    |> Maybe.map
-                        (\( lkn2, ( lk, lv, lastNode ) ) ->
-                            ( NonLeaf ln lkn2, lk, lv, NonLeaf lastNode (( k, v, rn ) :: rkn) )
-                        )
-            else
-                Nothing
-
-        _ ->
-            Nothing
-    )
-        -- reassemble
-        |> Maybe.map (\( l2, k2, v2, r2 ) -> zipNKNList nk l2 (( k2, v2, r2 ) :: kn))
-
-
-mergeNodes : NKList comparable v -> Node comparable v -> comparable -> v -> Node comparable v -> KNList comparable v -> NKNList comparable v
-mergeNodes nk l k v r kn =
-    (case ( l, r ) of
-        ( Leaf llist, Leaf rlist ) ->
-            Leaf (llist ++ ( k, v ) :: rlist)
-
-        ( NonLeaf ln lkn, NonLeaf rn rkn ) ->
-            NonLeaf ln (lkn ++ ( k, v, rn ) :: rkn)
-
-        _ ->
-            Debug.crash "attempting to merge Leaf and NonLeaf nodes"
-    )
-        |> (\n -> zipNKNList nk n kn)
-
-
-replaceSplitKey : NKList comparable v -> Node comparable v -> Node comparable v -> KNList comparable v -> NKNList comparable v
-replaceSplitKey nk l r kn =
-    case borrowSmallestKey r of
-        Just ( k, v, r2 ) ->
-            zipNKNList nk l (( k, v, r2 ) :: kn)
-
-        Nothing ->
-            case borrowLargestKey l of
-                Just ( l2, k, v ) ->
-                    zipNKNList nk l2 (( k, v, r ) :: kn)
-
-                Nothing ->
-                    if List.isEmpty kn then
-                        case getLargestKey l of
-                            Just ( k, v ) ->
-                                rebalance nk (removeHelp k l) (( k, v, r ) :: kn)
-
-                            Nothing ->
-                                -- empty left node
-                                -- zipNKNList nk r kn
-                                Debug.crash "empty left node"
-                    else
-                        case getSmallestKey r of
-                            Just ( k, v ) ->
-                                rebalance (( l, k, v ) :: nk) (removeHelp k r) kn
-
-                            Nothing ->
-                                -- empty right node
-                                -- zipNKNList nk l kn
-                                Debug.crash "empty right node"
-
-
-getSmallestKey : Node comparable v -> Maybe ( comparable, v )
-getSmallestKey node =
-    case node of
-        Leaf list ->
-            List.head list
-
-        NonLeaf n _ ->
-            getSmallestKey n
-
-
-getLargestKey : Node comparable v -> Maybe ( comparable, v )
-getLargestKey node =
-    case node of
-        Leaf list ->
-            getLast list
-
-        NonLeaf n [] ->
-            getLargestKey n
-
-        NonLeaf _ kn ->
-            getLast kn |> Maybe.andThen (\( _, _, lastNode ) -> getLargestKey lastNode)
-
-
-borrowSmallestKey : Node comparable v -> Maybe ( comparable, v, Node comparable v )
-borrowSmallestKey node =
-    case node of
-        Leaf list ->
-            if List.length list > minKeys then
-                popFirst list |> Maybe.map (\( ( k, v ), list2 ) -> ( k, v, Leaf list2 ))
-            else
-                Nothing
-
-        NonLeaf n kn ->
-            borrowSmallestKey n |> Maybe.map (\( k, v, n2 ) -> ( k, v, NonLeaf n2 kn ))
-
-
-borrowLargestKey : Node comparable v -> Maybe ( Node comparable v, comparable, v )
-borrowLargestKey node =
-    case node of
-        Leaf list ->
-            if List.length list > minKeys then
-                popLast list |> Maybe.map (\( list2, ( k, v ) ) -> ( Leaf list2, k, v ))
-            else
-                Nothing
-
-        NonLeaf n [] ->
-            borrowLargestKey n |> Maybe.map (\( n2, k, v ) -> ( NonLeaf n2 [], k, v ))
-
-        NonLeaf n kn ->
-            popLast kn
-                |> Maybe.andThen
-                    (\( kn2, ( lastKey, lastVal, lastNode ) ) ->
-                        borrowLargestKey lastNode |> Maybe.map (\( lastNode2, k, v ) -> ( NonLeaf n (kn2 ++ [ ( lastKey, lastVal, lastNode2 ) ]), k, v ))
-                    )
-
-
-
--- foldl
-
-
-foldl : (comparable -> v -> a -> a) -> a -> Node comparable v -> a
-foldl f result node =
-    case node of
-        Leaf list ->
-            foldlKList f result list
-
-        NonLeaf n kn ->
-            foldlKNList f (foldl f result n) kn
-
-
-foldlKList : (comparable -> v -> a -> a) -> a -> List ( comparable, v ) -> a
-foldlKList f result list =
+deduplicateHelp : List ( comparable, v ) -> ( comparable, v ) -> List ( comparable, v ) -> List ( comparable, v )
+deduplicateHelp revList (( key, _ ) as pair) list =
     case list of
-        ( k, v ) :: rest ->
-            foldlKList f (f k v result) rest
+        (( nextKey, _ ) as nextPair) :: rest ->
+            if key == nextKey then
+                deduplicateHelp (revList) nextPair rest
+            else
+                deduplicateHelp (pair :: revList) nextPair rest
 
         [] ->
-            result
+            pair :: revList
 
 
-foldlKNList : (comparable -> v -> a -> a) -> a -> KNList comparable v -> a
-foldlKNList f result kn =
-    case kn of
-        ( k, v, n ) :: kn2 ->
-            foldlKNList f (foldl f (f k v result) n) kn2
-
-        [] ->
-            result
+type alias NodeList k v =
+    ( Node k v, List ( ( k, v ), Node k v ) )
 
 
-
--- to/from List
-
-
-{-| Naive implementation; consider bulkloading
--}
-fromList : List ( comparable, v ) -> Node comparable v
-fromList =
-    List.foldl (uncurry insert) empty
-
-
-{-| TODO compare this to foldr without reverse
--}
-toList : Node comparable v -> List ( comparable, v )
-toList =
-    foldl (\k v r -> ( k, v ) :: r) []
-        >> List.reverse
-
-
-
--- size
-
-
-size : Node k v -> Int
-size node =
-    case node of
-        Leaf list ->
-            List.length list
-
-        NonLeaf n kn ->
-            sizeKNList (size n) kn
-
-
-sizeKNList : Int -> List ( k, v, Node k v ) -> Int
-sizeKNList r kn =
-    case kn of
-        ( _, _, n ) :: kn2 ->
-            sizeKNList (r + 1 + size n) kn2
-
-        [] ->
-            r
-
-
-
--- Maybe functions
-
-
-orElseLazy : (() -> Maybe a) -> Maybe a -> Maybe a
-orElseLazy f m =
-    case m of
-        Just _ ->
-            m
-
-        Nothing ->
-            f ()
-
-
-withDefaultLazy : (() -> a) -> Maybe a -> a
-withDefaultLazy f m =
-    case m of
-        Just x ->
-            x
-
-        Nothing ->
-            f ()
-
-
-
--- List functions
-
-
-getLast : List a -> Maybe a
-getLast list =
+pairsToNodeList : List ( k, v ) -> NodeList k v
+pairsToNodeList list =
     case list of
-        _ :: ((_ :: _) as rest) ->
-            getLast rest
+        [] ->
+            ( Leaf, [] )
 
         x :: rest ->
-            Just x
-
-        [] ->
-            Nothing
+            pairsToNodeListHelp [] x rest
 
 
-{-| uncons
--}
-popFirst : List a -> Maybe ( a, List a )
-popFirst list =
-    case list of
-        head :: tail ->
-            Just ( head, tail )
-
-        [] ->
-            Nothing
-
-
-popLast : List a -> Maybe ( List a, a )
-popLast list =
-    case list of
-        head :: tail ->
-            Just (popLastHelp [] head tail)
-
-        [] ->
-            Nothing
-
-
-popLastHelp : List a -> a -> List a -> ( List a, a )
-popLastHelp rev x list =
+pairsToNodeListHelp : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
+pairsToNodeListHelp revList a list =
     case list of
         [] ->
-            ( List.reverse rev, x )
+            ( N2 Leaf a Leaf, revList )
 
-        y :: rest ->
-            popLastHelp (x :: rev) y rest
+        b :: [] ->
+            ( N3 Leaf b Leaf a Leaf, revList )
 
+        b :: c :: [] ->
+            ( N4 Leaf c Leaf b Leaf a Leaf, revList )
 
-{-| Split `list` into two halves, `( a, b )`, such that `a ++ b == list`.
+        b :: c :: d :: [] ->
+            ( N2 Leaf d Leaf, ( c, N3 Leaf b Leaf a Leaf ) :: revList )
 
-    bisect [ 1, 2, 3, 4 ] == ( [ 1, 2 ], [ 3, 4 ] )
-
-If the list is odd in length, then the first half will be the shorter of the halves.
-
-    bisect [ 1, 2, 3 ] == ( [ 1 ], [ 2, 3 ] )
-
--}
-bisect : List a -> ( List a, List a )
-bisect list =
-    bisectHelp (List.length list // 2) [] list
+        b :: c :: d :: e :: rest ->
+            pairsToNodeListHelp (( d, N4 Leaf c Leaf b Leaf a Leaf ) :: revList) e rest
 
 
-bisectHelp : Int -> List a -> List a -> ( List a, List a )
-bisectHelp i rev list =
-    if i <= 0 then
-        ( List.reverse rev, list )
-    else
-        case list of
-            x :: rest ->
-                bisectHelp (i - 1) (x :: rev) rest
+fromNodeList : Bool -> NodeList k v -> Node k v
+fromNodeList isReversed nodeList =
+    case nodeList of
+        ( node, [] ) ->
+            node
 
-            _ ->
-                ( [], [] )
+        ( a, ( p1, b ) :: list ) ->
+            accumulateNodeList isReversed [] a p1 b list |> fromNodeList (not isReversed)
+
+
+accumulateNodeList : Bool -> List ( ( k, v ), Node k v ) -> Node k v -> ( k, v ) -> Node k v -> List ( ( k, v ), Node k v ) -> NodeList k v
+accumulateNodeList isReversed revList a p1 b list =
+    case list of
+        [] ->
+            if isReversed then
+                ( N2 b p1 a, revList )
+            else
+                ( N2 a p1 b, revList )
+
+        ( p2, c ) :: [] ->
+            if isReversed then
+                ( N3 c p2 b p1 a, revList )
+            else
+                ( N3 a p1 b p2 c, revList )
+
+        ( p2, c ) :: ( p3, d ) :: [] ->
+            if isReversed then
+                ( N4 d p3 c p2 b p1 a, revList )
+            else
+                ( N4 a p1 b p2 c p3 d, revList )
+
+        ( p2, c ) :: ( p3, d ) :: ( p4, e ) :: [] ->
+            if isReversed then
+                ( N2 e p4 d, ( p3, N3 c p2 b p1 a ) :: revList )
+            else
+                ( N2 d p4 e, ( p3, N3 a p1 b p2 c ) :: revList )
+
+        ( p2, c ) :: ( p3, d ) :: ( p4, e ) :: ( p5, f ) :: rest ->
+            if isReversed then
+                accumulateNodeList isReversed (( p4, N4 d p3 c p2 b p1 a ) :: revList) e p5 f rest
+            else
+                accumulateNodeList isReversed (( p4, N4 a p1 b p2 c p3 d ) :: revList) e p5 f rest

@@ -1,7 +1,7 @@
-module Example4 exposing (..)
+module Examples exposing (..)
 
 import Char
-import Dict.BTree4 as Dict exposing (Node(..))
+import Dict.BTree as Dict exposing (Node(..))
 
 
 letters =
