@@ -36,6 +36,10 @@ getValuesFromEx1 =
         |> String.fromList
 
 
+( even, odd ) =
+    List.range 1 10 |> List.map (\n -> ( n, n )) |> Dict.fromList |> Dict.partition (\n _ -> n % 2 == 0)
+
+
 tests =
     [ getValuesFromEx1 == String.toLower letters
     , Dict.toList ex1 == List.sortBy Tuple.first list
@@ -49,6 +53,9 @@ tests =
     , Dict.size ex3 == 190
     , Dict.get 27 ex2 == Just "27"
     , Dict.get 27 ex3 == Nothing
+    , (Dict.filter (\k _ -> k > 0) ex2 |> Dict.keys) == List.range 1 100
+    , Dict.keys even == [ 2, 4, 6, 8, 10 ]
+    , Dict.keys odd == [ 1, 3, 5, 7, 9 ]
     ]
 
 

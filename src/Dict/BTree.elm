@@ -13,6 +13,8 @@ module Dict.BTree
         , map
         , foldl
         , foldr
+        , filter
+        , partition
         , keys
         , values
         , fromList
@@ -744,7 +746,7 @@ foldr f result node =
             foldr f (f k1 v1 (foldr f (f k2 v2 (foldr f (f k3 v3 (foldr f result d)) c)) b)) a
 
 
-{-| Alternate foldr whose function argument takes a key-value tuple.
+{-| Alternate foldr where the mapping function takes a key-value tuple
 -}
 foldr_ : (( k, v ) -> a -> a) -> a -> Node k v -> a
 foldr_ f result node =
@@ -760,6 +762,36 @@ foldr_ f result node =
 
         N4 a p1 b p2 c p3 d ->
             foldr_ f (f p1 (foldr_ f (f p2 (foldr_ f (f p3 (foldr_ f result d)) c)) b)) a
+
+
+
+-- filter, partition
+
+
+filter : (k -> v -> Bool) -> Node k v -> Node k v
+filter pred =
+    foldr_
+        (\(( key, val ) as pair) list ->
+            if pred key val then
+                pair :: list
+            else
+                list
+        )
+        []
+        >> fromSortedList True
+
+
+partition : (k -> v -> Bool) -> Node k v -> ( Node k v, Node k v )
+partition pred =
+    foldr_
+        (\(( key, val ) as pair) ( list1, list2 ) ->
+            if pred key val then
+                ( pair :: list1, list2 )
+            else
+                ( list1, pair :: list2 )
+        )
+        ( [], [] )
+        >> (\( list1, list2 ) -> ( fromSortedList True list1, fromSortedList True list2 ))
 
 
 
@@ -781,14 +813,14 @@ toList =
     foldr_ (::) []
 
 
-{-| Builds tree from the bottom up.
+{-| Builds tree from the bottom up
 -}
 fromList : List ( comparable, v ) -> Node comparable v
 fromList =
-    List.sortBy Tuple.first >> deduplicate >> pairsToNodeList >> fromNodeList False
+    List.sortBy Tuple.first >> deduplicate >> fromSortedList False
 
 
-{-| Reverses list; last duplicate wins.
+{-| Strips consecutive duplicates, where last duplicate wins; reverses list
 -}
 deduplicate : List ( comparable, v ) -> List ( comparable, v )
 deduplicate list =
@@ -813,22 +845,46 @@ deduplicateHelp revList (( key, _ ) as pair) list =
             pair :: revList
 
 
+{-| Expects keys in assoc list to be sorted and distinct
+-}
+fromSortedList : Bool -> List ( k, v ) -> Node k v
+fromSortedList isAsc list =
+    case list of
+        [] ->
+            Leaf
+
+        x :: rest ->
+            if isAsc then
+                pairsToNodeListAsc [] x rest |> fromNodeList True
+            else
+                pairsToNodeListDesc [] x rest |> fromNodeList False
+
+
 type alias NodeList k v =
     ( Node k v, List ( ( k, v ), Node k v ) )
 
 
-pairsToNodeList : List ( k, v ) -> NodeList k v
-pairsToNodeList list =
+pairsToNodeListAsc : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
+pairsToNodeListAsc revList a list =
     case list of
         [] ->
-            ( Leaf, [] )
+            ( N2 Leaf a Leaf, revList )
 
-        x :: rest ->
-            pairsToNodeListHelp [] x rest
+        b :: [] ->
+            ( N3 Leaf a Leaf b Leaf, revList )
+
+        b :: c :: [] ->
+            ( N4 Leaf a Leaf b Leaf c Leaf, revList )
+
+        b :: c :: d :: [] ->
+            ( N2 Leaf d Leaf, ( c, N3 Leaf a Leaf b Leaf ) :: revList )
+
+        b :: c :: d :: e :: rest ->
+            pairsToNodeListAsc (( d, N4 Leaf a Leaf b Leaf c Leaf ) :: revList) e rest
 
 
-pairsToNodeListHelp : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
-pairsToNodeListHelp revList a list =
+pairsToNodeListDesc : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
+pairsToNodeListDesc revList a list =
     case list of
         [] ->
             ( N2 Leaf a Leaf, revList )
@@ -843,7 +899,7 @@ pairsToNodeListHelp revList a list =
             ( N2 Leaf d Leaf, ( c, N3 Leaf b Leaf a Leaf ) :: revList )
 
         b :: c :: d :: e :: rest ->
-            pairsToNodeListHelp (( d, N4 Leaf c Leaf b Leaf a Leaf ) :: revList) e rest
+            pairsToNodeListDesc (( d, N4 Leaf c Leaf b Leaf a Leaf ) :: revList) e rest
 
 
 fromNodeList : Bool -> NodeList k v -> Node k v
@@ -856,6 +912,8 @@ fromNodeList isReversed nodeList =
             accumulateNodeList isReversed [] a p1 b list |> fromNodeList (not isReversed)
 
 
+{-| Reverses list
+-}
 accumulateNodeList : Bool -> List ( ( k, v ), Node k v ) -> Node k v -> ( k, v ) -> Node k v -> List ( ( k, v ), Node k v ) -> NodeList k v
 accumulateNodeList isReversed revList a p1 b list =
     case list of
