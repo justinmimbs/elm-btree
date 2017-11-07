@@ -4,23 +4,26 @@ import Char
 import Dict.BTree as Dict exposing (Node(..))
 
 
+stringToPairs : String -> List ( Char, Char )
+stringToPairs =
+    String.toList >> List.map (\c -> ( c, Char.toLower c ))
+
+
+dictRange : Int -> Int -> Node Int String
+dictRange x y =
+    List.range x y |> List.map (\n -> ( n, toString n )) |> Dict.fromList
+
+
 letters =
     "CSDTAMPIBWNGURKEHOLJYQZFXV"
 
 
-list =
-    String.toList letters
-        |> List.map (\c -> ( c, Char.toLower c ))
-
-
 ex1 =
-    Dict.fromList list
+    letters |> stringToPairs |> Dict.fromList
 
 
 ex2 =
-    List.range -100 100
-        |> List.map (\n -> ( n, toString n ))
-        |> Dict.fromList
+    dictRange -100 100
 
 
 ex3 =
@@ -37,12 +40,12 @@ getValuesFromEx1 =
 
 
 ( even, odd ) =
-    List.range 1 10 |> List.map (\n -> ( n, n )) |> Dict.fromList |> Dict.partition (\n _ -> n % 2 == 0)
+    dictRange 1 10 |> Dict.partition (\n _ -> n % 2 == 0)
 
 
 tests =
     [ getValuesFromEx1 == String.toLower letters
-    , Dict.toList ex1 == List.sortBy Tuple.first list
+    , Dict.toList ex1 == List.sortBy Tuple.first (letters |> stringToPairs)
     , not (areKeysOrdered duplicates)
     , not (areKeysOrdered unordered)
     , not (areLeavesAtSameDepth uneven)
@@ -56,6 +59,14 @@ tests =
     , (Dict.filter (\k _ -> k > 0) ex2 |> Dict.keys) == List.range 1 100
     , Dict.keys even == [ 2, 4, 6, 8, 10 ]
     , Dict.keys odd == [ 1, 3, 5, 7, 9 ]
+    , (Dict.intersect
+        ("BRAVO" |> stringToPairs |> Dict.fromList)
+        ("CHARLIE" |> stringToPairs |> Dict.fromList)
+        |> Dict.keys
+      )
+        == [ 'A', 'R' ]
+    , (Dict.intersect (dictRange 1 200) (dictRange 100 300) |> Dict.keys)
+        == List.range 100 200
     ]
 
 

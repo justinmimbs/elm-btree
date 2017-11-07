@@ -15,6 +15,7 @@ module Dict.BTree
         , foldr
         , filter
         , partition
+        , intersect
         , keys
         , values
         , fromList
@@ -792,6 +793,48 @@ partition pred =
         )
         ( [], [] )
         >> (\( list1, list2 ) -> ( fromSortedList True list1, fromSortedList True list2 ))
+
+
+
+-- set operations
+
+
+intersect : Node comparable v -> Node comparable v -> Node comparable v
+intersect dictA dictB =
+    foldl
+        (\keyA _ ( result, listB ) ->
+            case listB of
+                [] ->
+                    ( result, [] )
+
+                (( keyB, _ ) as pairB) :: restB ->
+                    if keyA == keyB then
+                        -- advance both
+                        ( pairB :: result, restB )
+                    else if keyA < keyB then
+                        -- advance A
+                        ( result, listB )
+                    else
+                        -- advance B
+                        ( result, restB |> dropWhile (\( nextB, _ ) -> keyA > nextB) )
+        )
+        ( [], toList dictB )
+        dictA
+        |> Tuple.first
+        |> fromSortedList False
+
+
+dropWhile : (a -> Bool) -> List a -> List a
+dropWhile pred list =
+    case list of
+        [] ->
+            []
+
+        x :: rest ->
+            if pred x then
+                dropWhile pred rest
+            else
+                list
 
 
 
