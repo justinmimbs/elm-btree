@@ -281,17 +281,17 @@ used only at the root.
 fromNodeResult : NodeResult k v -> Node k v
 fromNodeResult nodeResult =
     case nodeResult of
-        Balanced n ->
+        Balanced node ->
             -- maintains depth
-            n
+            node
 
-        Split l p r ->
+        Split left pair right ->
             -- increases depth
-            N2 l p r
+            N2 left pair right
 
-        Underfull n ->
+        Underfull subnode ->
             -- decreases depth
-            n
+            subnode
 
 
 type RebalanceResult k v
@@ -880,39 +880,37 @@ toList =
     foldr_ (::) []
 
 
-{-| Builds tree from the bottom up
--}
 fromList : List ( comparable, v ) -> Node comparable v
 fromList =
-    List.sortBy Tuple.first >> deduplicate >> fromSortedList False
+    List.sortBy Tuple.first >> removeRepeats >> fromSortedList False
 
 
-{-| Strips consecutive duplicates, where last duplicate wins; reverses list
+{-| Remove consecutive duplicates, where last duplicate wins. (reverses order)
 -}
-deduplicate : List ( comparable, v ) -> List ( comparable, v )
-deduplicate list =
+removeRepeats : List ( comparable, v ) -> List ( comparable, v )
+removeRepeats list =
     case list of
         x :: list ->
-            deduplicateHelp [] x list
+            removeRepeatsHelp [] x list
 
         [] ->
             []
 
 
-deduplicateHelp : List ( comparable, v ) -> ( comparable, v ) -> List ( comparable, v ) -> List ( comparable, v )
-deduplicateHelp revList (( key, _ ) as pair) list =
+removeRepeatsHelp : List ( comparable, v ) -> ( comparable, v ) -> List ( comparable, v ) -> List ( comparable, v )
+removeRepeatsHelp revList (( key, _ ) as pair) list =
     case list of
         (( nextKey, _ ) as nextPair) :: rest ->
             if key == nextKey then
-                deduplicateHelp (revList) nextPair rest
+                removeRepeatsHelp (revList) nextPair rest
             else
-                deduplicateHelp (pair :: revList) nextPair rest
+                removeRepeatsHelp (pair :: revList) nextPair rest
 
         [] ->
             pair :: revList
 
 
-{-| Expects keys in assoc list to be sorted and distinct
+{-| Convert an association list with sorted and distinct keys into a dictionary.
 -}
 fromSortedList : Bool -> List ( k, v ) -> Node k v
 fromSortedList isAsc list =
@@ -922,17 +920,22 @@ fromSortedList isAsc list =
 
         x :: rest ->
             if isAsc then
-                pairsToNodeListAsc [] x rest |> fromNodeList True
+                sortedListToNodeListAsc [] x rest |> fromNodeList True
             else
-                pairsToNodeListDesc [] x rest |> fromNodeList False
+                sortedListToNodeListDesc [] x rest |> fromNodeList False
 
 
+{-| Represents a non-empty list of nodes separated by key-value pairs.
+-}
 type alias NodeList k v =
     ( Node k v, List ( ( k, v ), Node k v ) )
 
 
-pairsToNodeListAsc : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
-pairsToNodeListAsc revList a list =
+{-| Convert a non-empty association list to the bottom level of nodes separated
+by key-value pairs. (reverses order)
+-}
+sortedListToNodeListAsc : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
+sortedListToNodeListAsc revList a list =
     case list of
         [] ->
             ( N2 Leaf a Leaf, revList )
@@ -947,11 +950,11 @@ pairsToNodeListAsc revList a list =
             ( N2 Leaf d Leaf, ( c, N3 Leaf a Leaf b Leaf ) :: revList )
 
         b :: c :: d :: e :: rest ->
-            pairsToNodeListAsc (( d, N4 Leaf a Leaf b Leaf c Leaf ) :: revList) e rest
+            sortedListToNodeListAsc (( d, N4 Leaf a Leaf b Leaf c Leaf ) :: revList) e rest
 
 
-pairsToNodeListDesc : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
-pairsToNodeListDesc revList a list =
+sortedListToNodeListDesc : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
+sortedListToNodeListDesc revList a list =
     case list of
         [] ->
             ( N2 Leaf a Leaf, revList )
@@ -966,9 +969,12 @@ pairsToNodeListDesc revList a list =
             ( N2 Leaf d Leaf, ( c, N3 Leaf b Leaf a Leaf ) :: revList )
 
         b :: c :: d :: e :: rest ->
-            pairsToNodeListDesc (( d, N4 Leaf c Leaf b Leaf a Leaf ) :: revList) e rest
+            sortedListToNodeListDesc (( d, N4 Leaf c Leaf b Leaf a Leaf ) :: revList) e rest
 
 
+{-| Gather up a NodeList one level at a time, in successive passes of alternating
+direction, until a single root-node remains.
+-}
 fromNodeList : Bool -> NodeList k v -> Node k v
 fromNodeList isReversed nodeList =
     case nodeList of
@@ -976,10 +982,11 @@ fromNodeList isReversed nodeList =
             node
 
         ( a, ( p1, b ) :: list ) ->
-            accumulateNodeList isReversed [] a p1 b list |> fromNodeList (not isReversed)
+            accumulateNodeList isReversed [] a p1 b list
+                |> fromNodeList (not isReversed)
 
 
-{-| Reverses list
+{-| Gather up a NodeList to the next level. (reverses order)
 -}
 accumulateNodeList : Bool -> List ( ( k, v ), Node k v ) -> Node k v -> ( k, v ) -> Node k v -> List ( ( k, v ), Node k v ) -> NodeList k v
 accumulateNodeList isReversed revList a p1 b list =
