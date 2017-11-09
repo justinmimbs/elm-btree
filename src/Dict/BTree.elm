@@ -15,7 +15,9 @@ module Dict.BTree
         , foldr
         , filter
         , partition
+        , union
         , intersect
+        , diff
         , keys
         , values
         , fromList
@@ -799,42 +801,64 @@ partition pred =
 -- set operations
 
 
-intersect : Node comparable v -> Node comparable v -> Node comparable v
-intersect dictA dictB =
-    foldl
-        (\keyA _ ( result, listB ) ->
-            case listB of
-                [] ->
-                    ( result, [] )
-
-                (( keyB, _ ) as pairB) :: restB ->
-                    if keyA == keyB then
-                        -- advance both
-                        ( pairB :: result, restB )
-                    else if keyA < keyB then
-                        -- advance A
-                        ( result, listB )
-                    else
-                        -- advance B
-                        ( result, restB |> dropWhile (\( nextB, _ ) -> keyA > nextB) )
-        )
-        ( [], toList dictB )
-        dictA
-        |> Tuple.first
-        |> fromSortedList False
+union : Node comparable v -> Node comparable v -> Node comparable v
+union lDict rDict =
+    foldl unionAccumulator ( [], toList rDict ) lDict |> uncurry (List.foldl (::)) |> fromSortedList False
 
 
-dropWhile : (a -> Bool) -> List a -> List a
-dropWhile pred list =
-    case list of
+unionAccumulator : comparable -> v -> ( List ( comparable, v ), List ( comparable, v ) ) -> ( List ( comparable, v ), List ( comparable, v ) )
+unionAccumulator lKey lVal ( result, rList ) =
+    case rList of
         [] ->
-            []
+            ( ( lKey, lVal ) :: result, [] )
 
-        x :: rest ->
-            if pred x then
-                dropWhile pred rest
+        ( rKey, rVal ) :: rRest ->
+            if lKey == rKey then
+                ( ( lKey, lVal ) :: result, rRest )
+            else if lKey < rKey then
+                ( ( lKey, lVal ) :: result, rList )
             else
-                list
+                ( ( rKey, rVal ) :: result, rRest ) |> unionAccumulator lKey lVal
+
+
+intersect : Node comparable v -> Node comparable v -> Node comparable v
+intersect lDict rDict =
+    foldl intersectAccumulator ( [], toList rDict ) lDict |> Tuple.first |> fromSortedList False
+
+
+intersectAccumulator : comparable -> v -> ( List ( comparable, v ), List ( comparable, v ) ) -> ( List ( comparable, v ), List ( comparable, v ) )
+intersectAccumulator lKey lVal (( result, rList ) as return) =
+    case rList of
+        [] ->
+            return
+
+        ( rKey, rVal ) :: rRest ->
+            if lKey == rKey then
+                ( ( lKey, lVal ) :: result, rRest )
+            else if lKey < rKey then
+                return
+            else
+                ( result, rRest ) |> intersectAccumulator lKey lVal
+
+
+diff : Node comparable v -> Node comparable v -> Node comparable v
+diff lDict rDict =
+    foldl diffAccumulator ( [], toList rDict ) lDict |> Tuple.first |> fromSortedList False
+
+
+diffAccumulator : comparable -> v -> ( List ( comparable, v ), List ( comparable, v ) ) -> ( List ( comparable, v ), List ( comparable, v ) )
+diffAccumulator lKey lVal ( result, rList ) =
+    case rList of
+        [] ->
+            ( ( lKey, lVal ) :: result, [] )
+
+        ( rKey, rVal ) :: rRest ->
+            if lKey == rKey then
+                ( result, rRest )
+            else if lKey < rKey then
+                ( ( lKey, lVal ) :: result, rList )
+            else
+                ( result, rRest ) |> diffAccumulator lKey lVal
 
 
 

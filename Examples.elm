@@ -59,6 +59,14 @@ tests =
     , (Dict.filter (\k _ -> k > 0) ex2 |> Dict.keys) == List.range 1 100
     , Dict.keys even == [ 2, 4, 6, 8, 10 ]
     , Dict.keys odd == [ 1, 3, 5, 7, 9 ]
+    , (Dict.union
+        ("BRAVO" |> stringToPairs |> Dict.fromList)
+        ("CHARLIE" |> stringToPairs |> Dict.fromList)
+        |> Dict.keys
+      )
+        == [ 'A', 'B', 'C', 'E', 'H', 'I', 'L', 'O', 'R', 'V' ]
+    , (Dict.union (dictRange 1 200) (dictRange 100 300) |> Dict.keys)
+        == List.range 1 300
     , (Dict.intersect
         ("BRAVO" |> stringToPairs |> Dict.fromList)
         ("CHARLIE" |> stringToPairs |> Dict.fromList)
@@ -67,6 +75,14 @@ tests =
         == [ 'A', 'R' ]
     , (Dict.intersect (dictRange 1 200) (dictRange 100 300) |> Dict.keys)
         == List.range 100 200
+    , (Dict.diff
+        ("BRAVO" |> stringToPairs |> Dict.fromList)
+        ("CHARLIE" |> stringToPairs |> Dict.fromList)
+        |> Dict.keys
+      )
+        == [ 'B', 'O', 'V' ]
+    , (Dict.diff (dictRange 1 200) (dictRange 100 300) |> Dict.keys)
+        == List.range 1 99
     ]
 
 
