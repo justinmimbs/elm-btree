@@ -59,6 +59,8 @@ tests =
     , (Dict.filter (\k _ -> k > 0) ex2 |> Dict.keys) == List.range 1 100
     , Dict.keys even == [ 2, 4, 6, 8, 10 ]
     , Dict.keys odd == [ 1, 3, 5, 7, 9 ]
+
+    -- union
     , (Dict.union
         ("BRAVO" |> stringToPairs |> Dict.fromList)
         ("CHARLIE" |> stringToPairs |> Dict.fromList)
@@ -67,6 +69,14 @@ tests =
         == [ 'A', 'B', 'C', 'E', 'H', 'I', 'L', 'O', 'R', 'V' ]
     , (Dict.union (dictRange 1 200) (dictRange 100 300) |> Dict.keys)
         == List.range 1 300
+    , (Dict.union (dictRange 1 10) Dict.empty |> Dict.keys)
+        == List.range 1 10
+    , (Dict.union Dict.empty (dictRange 11 20) |> Dict.keys)
+        == List.range 11 20
+    , (Dict.union (dictRange 1 10) (dictRange 11 20) |> Dict.keys)
+        == List.range 1 20
+
+    -- intersect
     , (Dict.intersect
         ("BRAVO" |> stringToPairs |> Dict.fromList)
         ("CHARLIE" |> stringToPairs |> Dict.fromList)
@@ -75,6 +85,14 @@ tests =
         == [ 'A', 'R' ]
     , (Dict.intersect (dictRange 1 200) (dictRange 100 300) |> Dict.keys)
         == List.range 100 200
+    , (Dict.intersect (dictRange 1 10) Dict.empty |> Dict.keys)
+        == []
+    , (Dict.intersect Dict.empty (dictRange 11 20) |> Dict.keys)
+        == []
+    , (Dict.intersect (dictRange 1 10) (dictRange 11 20) |> Dict.keys)
+        == []
+
+    -- diff
     , (Dict.diff
         ("BRAVO" |> stringToPairs |> Dict.fromList)
         ("CHARLIE" |> stringToPairs |> Dict.fromList)
@@ -83,7 +101,51 @@ tests =
         == [ 'B', 'O', 'V' ]
     , (Dict.diff (dictRange 1 200) (dictRange 100 300) |> Dict.keys)
         == List.range 1 99
+    , (Dict.diff (dictRange 1 10) Dict.empty |> Dict.keys)
+        == List.range 1 10
+    , (Dict.diff Dict.empty (dictRange 11 20) |> Dict.keys)
+        == []
+    , (Dict.diff (dictRange 1 10) (dictRange 11 20) |> Dict.keys)
+        == List.range 1 10
+
+    -- merge
+    , (Dict.merge takeA takeAB takeA (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+        == List.range 1 15
+    , (Dict.merge skipA takeAB skipA (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+        == List.range 6 10
+    , (Dict.merge takeA skipAB skipA (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+        == List.range 1 5
+    , (Dict.merge skipA skipAB takeA (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+        == List.range 11 15
+    , (Dict.merge takeA skipAB takeA (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+        == (List.range 1 5 ++ List.range 11 15)
+    , (Dict.merge skipA skipAB skipA (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+        == []
+    , (Dict.merge takeA takeAB skipA (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+        == List.range 1 10
+    , (Dict.merge skipA takeAB takeA (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+        == List.range 6 15
     ]
+
+
+takeA k _ list =
+    k :: list
+
+
+takeAB k _ _ list =
+    k :: list
+
+
+skipA _ _ list =
+    list
+
+
+skipAB _ _ _ list =
+    list
+
+
+pass =
+    List.all identity tests
 
 
 

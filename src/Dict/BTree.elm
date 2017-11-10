@@ -18,6 +18,7 @@ module Dict.BTree
         , union
         , intersect
         , diff
+        , merge
         , keys
         , values
         , fromList
@@ -611,6 +612,22 @@ getSmallest smallest node =
             getSmallest (Just p1) a
 
 
+getLargest : Maybe ( k, v ) -> Node k v -> Maybe ( k, v )
+getLargest largest node =
+    case node of
+        Leaf ->
+            largest
+
+        N2 _ p1 b ->
+            getLargest (Just p1) b
+
+        N3 _ _ _ p2 c ->
+            getLargest (Just p2) c
+
+        N4 _ _ _ _ _ p3 d ->
+            getLargest (Just p3) d
+
+
 
 -- insert
 
@@ -798,12 +815,20 @@ partition pred =
 
 
 
--- set operations
+-- combine
 
 
 union : Node comparable v -> Node comparable v -> Node comparable v
-union lDict rDict =
-    foldl unionAccumulator ( [], toList rDict ) lDict |> uncurry (List.foldl (::)) |> fromSortedList False
+union left right =
+    case ( left, right ) of
+        ( _, Leaf ) ->
+            left
+
+        ( Leaf, right ) ->
+            right
+
+        _ ->
+            foldl unionAccumulator ( [], toList right ) left |> uncurry (List.foldl (::)) |> fromSortedList False
 
 
 unionAccumulator : comparable -> v -> ( List ( comparable, v ), List ( comparable, v ) ) -> ( List ( comparable, v ), List ( comparable, v ) )
@@ -822,8 +847,20 @@ unionAccumulator lKey lVal ( result, rList ) =
 
 
 intersect : Node comparable v -> Node comparable v -> Node comparable v
-intersect lDict rDict =
-    foldl intersectAccumulator ( [], toList rDict ) lDict |> Tuple.first |> fromSortedList False
+intersect left right =
+    case ( getRange left, getRange right ) of
+        ( _, Nothing ) ->
+            empty
+
+        ( Nothing, _ ) ->
+            empty
+
+        ( Just ( lMin, lMax ), Just ( rMin, rMax ) ) ->
+            if lMax < rMin || rMax < lMin then
+                -- disjoint ranges
+                empty
+            else
+                foldl intersectAccumulator ( [], toList right ) left |> Tuple.first |> fromSortedList False
 
 
 intersectAccumulator : comparable -> v -> ( List ( comparable, v ), List ( comparable, v ) ) -> ( List ( comparable, v ), List ( comparable, v ) )
@@ -842,8 +879,20 @@ intersectAccumulator lKey lVal (( result, rList ) as return) =
 
 
 diff : Node comparable v -> Node comparable v -> Node comparable v
-diff lDict rDict =
-    foldl diffAccumulator ( [], toList rDict ) lDict |> Tuple.first |> fromSortedList False
+diff left right =
+    case ( getRange left, getRange right ) of
+        ( _, Nothing ) ->
+            left
+
+        ( Nothing, _ ) ->
+            empty
+
+        ( Just ( lMin, lMax ), Just ( rMin, rMax ) ) ->
+            if lMax < rMin || rMax < lMin then
+                -- disjoint ranges
+                left
+            else
+                foldl diffAccumulator ( [], toList right ) left |> Tuple.first |> fromSortedList False
 
 
 diffAccumulator : comparable -> v -> ( List ( comparable, v ), List ( comparable, v ) ) -> ( List ( comparable, v ), List ( comparable, v ) )
@@ -859,6 +908,51 @@ diffAccumulator lKey lVal ( result, rList ) =
                 ( ( lKey, lVal ) :: result, rList )
             else
                 ( result, rRest ) |> diffAccumulator lKey lVal
+
+
+
+-- range
+
+
+getRange : Node comparable v -> Maybe ( comparable, comparable )
+getRange node =
+    case ( getSmallest Nothing node, getLargest Nothing node ) of
+        ( Just ( minKey, _ ), Just ( maxKey, _ ) ) ->
+            Just ( minKey, maxKey )
+
+        _ ->
+            Nothing
+
+
+
+-- merge
+
+
+merge :
+    (comparable -> a -> result -> result)
+    -> (comparable -> a -> b -> result -> result)
+    -> (comparable -> b -> result -> result)
+    -> Node comparable a
+    -> Node comparable b
+    -> result
+    -> result
+merge accLeft accBoth accRight left right result0 =
+    let
+        accumulate : comparable -> a -> ( result, List ( comparable, b ) ) -> ( result, List ( comparable, b ) )
+        accumulate lKey lVal ( result, rList ) =
+            case rList of
+                [] ->
+                    ( accLeft lKey lVal result, [] )
+
+                ( rKey, rVal ) :: rRest ->
+                    if lKey == rKey then
+                        ( accBoth lKey lVal rVal result, rRest )
+                    else if lKey < rKey then
+                        ( accLeft lKey lVal result, rList )
+                    else
+                        ( accRight rKey rVal result, rRest ) |> accumulate lKey lVal
+    in
+        foldl accumulate ( result0, toList right ) left |> uncurry (List.foldl (uncurry accRight))
 
 
 
