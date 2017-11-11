@@ -1,7 +1,7 @@
 module Examples exposing (..)
 
 import Char
-import Dict.BTree as Dict exposing (Node(..))
+import Dict.BTree as Dict exposing (Dict(..))
 
 
 stringToPairs : String -> List ( Char, Char )
@@ -9,7 +9,7 @@ stringToPairs =
     String.toList >> List.map (\c -> ( c, Char.toLower c ))
 
 
-dictRange : Int -> Int -> Node Int String
+dictRange : Int -> Int -> Dict Int String
 dictRange x y =
     List.range x y |> List.map (\n -> ( n, toString n )) |> Dict.fromList
 
@@ -168,7 +168,7 @@ uneven =
 -- invariant checks
 
 
-isValid : Node comparable v -> Bool
+isValid : Dict comparable v -> Bool
 isValid node =
     areKeysOrdered node
         && areLeavesAtSameDepth node
@@ -176,14 +176,14 @@ isValid node =
 
 {-| (1) each key is greater than the previous (keys are in ascending order and unique)
 -}
-areKeysOrdered : Node comparable v -> Bool
+areKeysOrdered : Dict comparable v -> Bool
 areKeysOrdered =
     Dict.foldl (\key1 _ ( mKey0, ordered ) -> ( Just key1, ordered && unwrap True ((>) key1) mKey0 )) ( Nothing, True ) >> Tuple.second
 
 
 {-| (2) all leaves are stored at the same depth
 -}
-areLeavesAtSameDepth : Node k v -> Bool
+areLeavesAtSameDepth : Dict k v -> Bool
 areLeavesAtSameDepth node =
     case node of
         Leaf ->
@@ -208,7 +208,7 @@ areLeavesAtSameDepth node =
                 && areLeavesAtSameDepth d
 
 
-depthLeft : Node k v -> Int
+depthLeft : Dict k v -> Int
 depthLeft node =
     case node of
         Leaf ->

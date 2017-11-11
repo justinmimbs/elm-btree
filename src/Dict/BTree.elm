@@ -1,6 +1,6 @@
 module Dict.BTree
     exposing
-        ( Node(..)
+        ( Dict(..)
         , empty
         , singleton
         , isEmpty
@@ -29,29 +29,29 @@ module Dict.BTree
 -}
 
 
-type Node k v
+type Dict k v
     = Leaf
-    | N2 (Node k v) ( k, v ) (Node k v)
-    | N3 (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
-    | N4 (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
+    | N2 (Dict k v) ( k, v ) (Dict k v)
+    | N3 (Dict k v) ( k, v ) (Dict k v) ( k, v ) (Dict k v)
+    | N4 (Dict k v) ( k, v ) (Dict k v) ( k, v ) (Dict k v) ( k, v ) (Dict k v)
 
 
-empty : Node k v
+empty : Dict k v
 empty =
     Leaf
 
 
-singleton : comparable -> v -> Node comparable v
+singleton : comparable -> v -> Dict comparable v
 singleton key val =
     N2 Leaf ( key, val ) Leaf
 
 
-isEmpty : Node k v -> Bool
+isEmpty : Dict k v -> Bool
 isEmpty =
     (==) Leaf
 
 
-size : Node k v -> Int
+size : Dict k v -> Int
 size node =
     case node of
         Leaf ->
@@ -71,7 +71,7 @@ size node =
 -- get
 
 
-get : comparable -> Node comparable v -> Maybe v
+get : comparable -> Dict comparable v -> Maybe v
 get key node =
     case node of
         Leaf ->
@@ -121,7 +121,7 @@ get key node =
 -- member
 
 
-member : comparable -> Node comparable v -> Bool
+member : comparable -> Dict comparable v -> Bool
 member key node =
     case get key node of
         Just _ ->
@@ -138,32 +138,32 @@ member key node =
 {-| Represents the location of a specific subnode or key within a node.
 -}
 type UnzippedNode k v
-    = NodeLoc (Node k v) (NodeContext k v)
+    = NodeLoc (Dict k v) (NodeContext k v)
     | KeyLoc ( k, v ) (KeyContext k v)
 
 
 type NodeContext k v
-    = N2A ( k, v ) (Node k v)
-    | N2B (Node k v) ( k, v )
-    | N3A ( k, v ) (Node k v) ( k, v ) (Node k v)
-    | N3B (Node k v) ( k, v ) ( k, v ) (Node k v)
-    | N3C (Node k v) ( k, v ) (Node k v) ( k, v )
-    | N4A ( k, v ) (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
-    | N4B (Node k v) ( k, v ) ( k, v ) (Node k v) ( k, v ) (Node k v)
-    | N4C (Node k v) ( k, v ) (Node k v) ( k, v ) ( k, v ) (Node k v)
-    | N4D (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v) ( k, v )
+    = N2A ( k, v ) (Dict k v)
+    | N2B (Dict k v) ( k, v )
+    | N3A ( k, v ) (Dict k v) ( k, v ) (Dict k v)
+    | N3B (Dict k v) ( k, v ) ( k, v ) (Dict k v)
+    | N3C (Dict k v) ( k, v ) (Dict k v) ( k, v )
+    | N4A ( k, v ) (Dict k v) ( k, v ) (Dict k v) ( k, v ) (Dict k v)
+    | N4B (Dict k v) ( k, v ) ( k, v ) (Dict k v) ( k, v ) (Dict k v)
+    | N4C (Dict k v) ( k, v ) (Dict k v) ( k, v ) ( k, v ) (Dict k v)
+    | N4D (Dict k v) ( k, v ) (Dict k v) ( k, v ) (Dict k v) ( k, v )
 
 
 type KeyContext k v
-    = N2P1 (Node k v) (Node k v)
-    | N3P1 (Node k v) (Node k v) ( k, v ) (Node k v)
-    | N3P2 (Node k v) ( k, v ) (Node k v) (Node k v)
-    | N4P1 (Node k v) (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v)
-    | N4P2 (Node k v) ( k, v ) (Node k v) (Node k v) ( k, v ) (Node k v)
-    | N4P3 (Node k v) ( k, v ) (Node k v) ( k, v ) (Node k v) (Node k v)
+    = N2P1 (Dict k v) (Dict k v)
+    | N3P1 (Dict k v) (Dict k v) ( k, v ) (Dict k v)
+    | N3P2 (Dict k v) ( k, v ) (Dict k v) (Dict k v)
+    | N4P1 (Dict k v) (Dict k v) ( k, v ) (Dict k v) ( k, v ) (Dict k v)
+    | N4P2 (Dict k v) ( k, v ) (Dict k v) (Dict k v) ( k, v ) (Dict k v)
+    | N4P3 (Dict k v) ( k, v ) (Dict k v) ( k, v ) (Dict k v) (Dict k v)
 
 
-seek : comparable -> Node comparable v -> Maybe (UnzippedNode comparable v)
+seek : comparable -> Dict comparable v -> Maybe (UnzippedNode comparable v)
 seek key node =
     case node of
         Leaf ->
@@ -215,7 +215,7 @@ seek key node =
                 )
 
 
-zipNodeLoc : Node k v -> NodeContext k v -> Node k v
+zipNodeLoc : Dict k v -> NodeContext k v -> Dict k v
 zipNodeLoc node nodeContext =
     case nodeContext of
         N2A p1 b ->
@@ -246,7 +246,7 @@ zipNodeLoc node nodeContext =
             N4 a p1 b p2 c p3 node
 
 
-zipKeyLoc : ( k, v ) -> KeyContext k v -> Node k v
+zipKeyLoc : ( k, v ) -> KeyContext k v -> Dict k v
 zipKeyLoc pair keyContext =
     case keyContext of
         N2P1 a b ->
@@ -271,15 +271,15 @@ zipKeyLoc pair keyContext =
 {-| Represents the possible outcomes of modifying a node.
 -}
 type NodeResult k v
-    = Balanced (Node k v)
-    | Split (Node k v) ( k, v ) (Node k v)
-    | Underfull (Node k v)
+    = Balanced (Dict k v)
+    | Split (Dict k v) ( k, v ) (Dict k v)
+    | Underfull (Dict k v)
 
 
 {-| This is the only function that changes the depth of the tree; it's to be
 used only at the root.
 -}
-fromNodeResult : NodeResult k v -> Node k v
+fromNodeResult : NodeResult k v -> Dict k v
 fromNodeResult nodeResult =
     case nodeResult of
         Balanced node ->
@@ -296,11 +296,11 @@ fromNodeResult nodeResult =
 
 
 type RebalanceResult k v
-    = Rotated (Node k v) ( k, v ) (Node k v)
-    | Merged (Node k v)
+    = Rotated (Dict k v) ( k, v ) (Dict k v)
+    | Merged (Dict k v)
 
 
-rotateLeft : Node k v -> ( k, v ) -> Node k v -> RebalanceResult k v
+rotateLeft : Dict k v -> ( k, v ) -> Dict k v -> RebalanceResult k v
 rotateLeft subnode pair right =
     case right of
         Leaf ->
@@ -316,7 +316,7 @@ rotateLeft subnode pair right =
             Rotated (N2 subnode pair a) p1 (N3 b p2 c p3 d)
 
 
-rotateRight : Node k v -> ( k, v ) -> Node k v -> RebalanceResult k v
+rotateRight : Dict k v -> ( k, v ) -> Dict k v -> RebalanceResult k v
 rotateRight left pair subnode =
     case left of
         Leaf ->
@@ -518,7 +518,7 @@ zipWithoutKey keyContext =
                     Balanced (N3 a p1 b p2 cd)
 
 
-findReplacementKey : Node comparable v -> Node comparable v -> RebalanceResult comparable v
+findReplacementKey : Dict comparable v -> Dict comparable v -> RebalanceResult comparable v
 findReplacementKey left right =
     case borrowSmallest right of
         Just ( pair, newRight ) ->
@@ -546,7 +546,7 @@ findReplacementKey left right =
                             Merged Leaf
 
 
-borrowSmallest : Node k v -> Maybe ( ( k, v ), Node k v )
+borrowSmallest : Dict k v -> Maybe ( ( k, v ), Dict k v )
 borrowSmallest node =
     case node of
         Leaf ->
@@ -571,7 +571,7 @@ borrowSmallest node =
                 borrowSmallest a |> Maybe.map (\( smallest, aNew ) -> ( smallest, N4 aNew p1 b p2 c p3 d ))
 
 
-borrowLargest : Node k v -> Maybe ( Node k v, ( k, v ) )
+borrowLargest : Dict k v -> Maybe ( Dict k v, ( k, v ) )
 borrowLargest node =
     case node of
         Leaf ->
@@ -596,7 +596,7 @@ borrowLargest node =
                 borrowLargest d |> Maybe.map (\( dNew, largest ) -> ( N4 a p1 b p2 c p3 dNew, largest ))
 
 
-getSmallest : Maybe ( k, v ) -> Node k v -> Maybe ( k, v )
+getSmallest : Maybe ( k, v ) -> Dict k v -> Maybe ( k, v )
 getSmallest smallest node =
     case node of
         Leaf ->
@@ -612,7 +612,7 @@ getSmallest smallest node =
             getSmallest (Just p1) a
 
 
-getLargest : Maybe ( k, v ) -> Node k v -> Maybe ( k, v )
+getLargest : Maybe ( k, v ) -> Dict k v -> Maybe ( k, v )
 getLargest largest node =
     case node of
         Leaf ->
@@ -632,12 +632,12 @@ getLargest largest node =
 -- insert
 
 
-insert : comparable -> v -> Node comparable v -> Node comparable v
+insert : comparable -> v -> Dict comparable v -> Dict comparable v
 insert key val =
     insertHelp ( key, val ) >> fromNodeResult
 
 
-insertHelp : ( comparable, v ) -> Node comparable v -> NodeResult comparable v
+insertHelp : ( comparable, v ) -> Dict comparable v -> NodeResult comparable v
 insertHelp (( key, _ ) as pair) node =
     case seek key node of
         Nothing ->
@@ -656,12 +656,12 @@ insertHelp (( key, _ ) as pair) node =
 -- remove
 
 
-remove : comparable -> Node comparable v -> Node comparable v
+remove : comparable -> Dict comparable v -> Dict comparable v
 remove key =
     removeHelp key >> fromNodeResult
 
 
-removeHelp : comparable -> Node comparable v -> NodeResult comparable v
+removeHelp : comparable -> Dict comparable v -> NodeResult comparable v
 removeHelp key node =
     case seek key node of
         Nothing ->
@@ -680,12 +680,12 @@ removeHelp key node =
 -- update
 
 
-update : comparable -> (Maybe v -> Maybe v) -> Node comparable v -> Node comparable v
+update : comparable -> (Maybe v -> Maybe v) -> Dict comparable v -> Dict comparable v
 update key f =
     updateHelp key f >> fromNodeResult
 
 
-updateHelp : comparable -> (Maybe v -> Maybe v) -> Node comparable v -> NodeResult comparable v
+updateHelp : comparable -> (Maybe v -> Maybe v) -> Dict comparable v -> NodeResult comparable v
 updateHelp key f node =
     case seek key node of
         Nothing ->
@@ -714,7 +714,7 @@ updateHelp key f node =
 -- map
 
 
-map : (k -> a -> b) -> Node k a -> Node k b
+map : (k -> a -> b) -> Dict k a -> Dict k b
 map f node =
     case node of
         Leaf ->
@@ -734,7 +734,7 @@ map f node =
 -- fold
 
 
-foldl : (k -> v -> a -> a) -> a -> Node k v -> a
+foldl : (k -> v -> a -> a) -> a -> Dict k v -> a
 foldl f result node =
     case node of
         Leaf ->
@@ -750,7 +750,7 @@ foldl f result node =
             foldl f (f k3 v3 (foldl f (f k2 v2 (foldl f (f k1 v1 (foldl f result a)) b)) c)) d
 
 
-foldr : (k -> v -> a -> a) -> a -> Node k v -> a
+foldr : (k -> v -> a -> a) -> a -> Dict k v -> a
 foldr f result node =
     case node of
         Leaf ->
@@ -768,7 +768,7 @@ foldr f result node =
 
 {-| Alternate foldr where the mapping function takes a key-value tuple
 -}
-foldr_ : (( k, v ) -> a -> a) -> a -> Node k v -> a
+foldr_ : (( k, v ) -> a -> a) -> a -> Dict k v -> a
 foldr_ f result node =
     case node of
         Leaf ->
@@ -788,7 +788,7 @@ foldr_ f result node =
 -- filter, partition
 
 
-filter : (k -> v -> Bool) -> Node k v -> Node k v
+filter : (k -> v -> Bool) -> Dict k v -> Dict k v
 filter pred =
     foldr_
         (\(( key, val ) as pair) list ->
@@ -801,7 +801,7 @@ filter pred =
         >> fromSortedList True
 
 
-partition : (k -> v -> Bool) -> Node k v -> ( Node k v, Node k v )
+partition : (k -> v -> Bool) -> Dict k v -> ( Dict k v, Dict k v )
 partition pred =
     foldr_
         (\(( key, val ) as pair) ( list1, list2 ) ->
@@ -818,7 +818,7 @@ partition pred =
 -- combine
 
 
-union : Node comparable v -> Node comparable v -> Node comparable v
+union : Dict comparable v -> Dict comparable v -> Dict comparable v
 union left right =
     case ( left, right ) of
         ( _, Leaf ) ->
@@ -846,7 +846,7 @@ unionAccumulator lKey lVal ( result, rList ) =
                 ( ( rKey, rVal ) :: result, rRest ) |> unionAccumulator lKey lVal
 
 
-intersect : Node comparable v -> Node comparable v -> Node comparable v
+intersect : Dict comparable v -> Dict comparable v -> Dict comparable v
 intersect left right =
     case ( getRange left, getRange right ) of
         ( _, Nothing ) ->
@@ -878,7 +878,7 @@ intersectAccumulator lKey lVal (( result, rList ) as return) =
                 ( result, rRest ) |> intersectAccumulator lKey lVal
 
 
-diff : Node comparable v -> Node comparable v -> Node comparable v
+diff : Dict comparable v -> Dict comparable v -> Dict comparable v
 diff left right =
     case ( getRange left, getRange right ) of
         ( _, Nothing ) ->
@@ -914,7 +914,7 @@ diffAccumulator lKey lVal ( result, rList ) =
 -- range
 
 
-getRange : Node comparable v -> Maybe ( comparable, comparable )
+getRange : Dict comparable v -> Maybe ( comparable, comparable )
 getRange node =
     case ( getSmallest Nothing node, getLargest Nothing node ) of
         ( Just ( minKey, _ ), Just ( maxKey, _ ) ) ->
@@ -932,8 +932,8 @@ merge :
     (comparable -> a -> result -> result)
     -> (comparable -> a -> b -> result -> result)
     -> (comparable -> b -> result -> result)
-    -> Node comparable a
-    -> Node comparable b
+    -> Dict comparable a
+    -> Dict comparable b
     -> result
     -> result
 merge accLeft accBoth accRight left right result0 =
@@ -959,22 +959,22 @@ merge accLeft accBoth accRight left right result0 =
 -- list
 
 
-keys : Node k v -> List k
+keys : Dict k v -> List k
 keys =
     foldr (\k _ -> (::) k) []
 
 
-values : Node k v -> List v
+values : Dict k v -> List v
 values =
     foldr (\_ v -> (::) v) []
 
 
-toList : Node k v -> List ( k, v )
+toList : Dict k v -> List ( k, v )
 toList =
     foldr_ (::) []
 
 
-fromList : List ( comparable, v ) -> Node comparable v
+fromList : List ( comparable, v ) -> Dict comparable v
 fromList =
     List.sortBy Tuple.first >> removeRepeats >> fromSortedList False
 
@@ -984,8 +984,8 @@ fromList =
 removeRepeats : List ( comparable, v ) -> List ( comparable, v )
 removeRepeats list =
     case list of
-        x :: list ->
-            removeRepeatsHelp [] x list
+        pair :: rest ->
+            removeRepeatsHelp [] pair rest
 
         [] ->
             []
@@ -1006,70 +1006,70 @@ removeRepeatsHelp revList (( key, _ ) as pair) list =
 
 {-| Convert an association list with sorted and distinct keys into a dictionary.
 -}
-fromSortedList : Bool -> List ( k, v ) -> Node k v
+fromSortedList : Bool -> List ( k, v ) -> Dict k v
 fromSortedList isAsc list =
     case list of
         [] ->
             Leaf
 
-        x :: rest ->
+        pair :: rest ->
             if isAsc then
-                sortedListToNodeListAsc [] x rest |> fromNodeList True
+                sortedListToNodeListAsc [] pair rest |> fromNodeList True
             else
-                sortedListToNodeListDesc [] x rest |> fromNodeList False
+                sortedListToNodeListDesc [] pair rest |> fromNodeList False
 
 
 {-| Represents a non-empty list of nodes separated by key-value pairs.
 -}
 type alias NodeList k v =
-    ( Node k v, List ( ( k, v ), Node k v ) )
+    ( Dict k v, List ( ( k, v ), Dict k v ) )
 
 
 {-| Convert a non-empty association list to the bottom level of nodes separated
 by key-value pairs. (reverses order)
 -}
-sortedListToNodeListAsc : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
-sortedListToNodeListAsc revList a list =
+sortedListToNodeListAsc : List ( ( k, v ), Dict k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
+sortedListToNodeListAsc revList p1 list =
     case list of
         [] ->
-            ( N2 Leaf a Leaf, revList )
+            ( N2 Leaf p1 Leaf, revList )
 
-        b :: [] ->
-            ( N3 Leaf a Leaf b Leaf, revList )
+        p2 :: [] ->
+            ( N3 Leaf p1 Leaf p2 Leaf, revList )
 
-        b :: c :: [] ->
-            ( N4 Leaf a Leaf b Leaf c Leaf, revList )
+        p2 :: p3 :: [] ->
+            ( N4 Leaf p1 Leaf p2 Leaf p3 Leaf, revList )
 
-        b :: c :: d :: [] ->
-            ( N2 Leaf d Leaf, ( c, N3 Leaf a Leaf b Leaf ) :: revList )
+        p2 :: p3 :: p4 :: [] ->
+            ( N2 Leaf p4 Leaf, ( p3, N3 Leaf p1 Leaf p2 Leaf ) :: revList )
 
-        b :: c :: d :: e :: rest ->
-            sortedListToNodeListAsc (( d, N4 Leaf a Leaf b Leaf c Leaf ) :: revList) e rest
+        p2 :: p3 :: p4 :: p5 :: rest ->
+            sortedListToNodeListAsc (( p4, N4 Leaf p1 Leaf p2 Leaf p3 Leaf ) :: revList) p5 rest
 
 
-sortedListToNodeListDesc : List ( ( k, v ), Node k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
-sortedListToNodeListDesc revList a list =
+sortedListToNodeListDesc : List ( ( k, v ), Dict k v ) -> ( k, v ) -> List ( k, v ) -> NodeList k v
+sortedListToNodeListDesc revList p1 list =
     case list of
         [] ->
-            ( N2 Leaf a Leaf, revList )
+            ( N2 Leaf p1 Leaf, revList )
 
-        b :: [] ->
-            ( N3 Leaf b Leaf a Leaf, revList )
+        p2 :: [] ->
+            ( N3 Leaf p2 Leaf p1 Leaf, revList )
 
-        b :: c :: [] ->
-            ( N4 Leaf c Leaf b Leaf a Leaf, revList )
+        p2 :: p3 :: [] ->
+            ( N4 Leaf p3 Leaf p2 Leaf p1 Leaf, revList )
 
-        b :: c :: d :: [] ->
-            ( N2 Leaf d Leaf, ( c, N3 Leaf b Leaf a Leaf ) :: revList )
+        p2 :: p3 :: p4 :: [] ->
+            ( N2 Leaf p4 Leaf, ( p3, N3 Leaf p2 Leaf p1 Leaf ) :: revList )
 
-        b :: c :: d :: e :: rest ->
-            sortedListToNodeListDesc (( d, N4 Leaf c Leaf b Leaf a Leaf ) :: revList) e rest
+        p2 :: p3 :: p4 :: p5 :: rest ->
+            sortedListToNodeListDesc (( p4, N4 Leaf p3 Leaf p2 Leaf p1 Leaf ) :: revList) p5 rest
 
 
 {-| Gather up a NodeList one level at a time, in successive passes of alternating
 direction, until a single root-node remains.
 -}
-fromNodeList : Bool -> NodeList k v -> Node k v
+fromNodeList : Bool -> NodeList k v -> Dict k v
 fromNodeList isReversed nodeList =
     case nodeList of
         ( node, [] ) ->
@@ -1082,7 +1082,7 @@ fromNodeList isReversed nodeList =
 
 {-| Gather up a NodeList to the next level. (reverses order)
 -}
-accumulateNodeList : Bool -> List ( ( k, v ), Node k v ) -> Node k v -> ( k, v ) -> Node k v -> List ( ( k, v ), Node k v ) -> NodeList k v
+accumulateNodeList : Bool -> List ( ( k, v ), Dict k v ) -> Dict k v -> ( k, v ) -> Dict k v -> List ( ( k, v ), Dict k v ) -> NodeList k v
 accumulateNodeList isReversed revList a p1 b list =
     case list of
         [] ->
