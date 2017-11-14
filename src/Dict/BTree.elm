@@ -41,7 +41,7 @@ empty =
     Leaf
 
 
-singleton : comparable -> v -> Dict comparable v
+singleton : k -> v -> Dict k v
 singleton key val =
     N2 Leaf ( key, val ) Leaf
 
@@ -135,13 +135,24 @@ member key node =
 -- zipping
 
 
-{-| Represents the location of a specific subnode or key within a node.
+{-| Represents a tree "unzipped" to the location of a specific node or key
+within a tree. This structure contains the node or key under focus as well as
+the context needed to "zip" the tree back up.
 -}
-type UnzippedNode k v
-    = NodeLoc (Dict k v) (NodeContext k v)
-    | KeyLoc ( k, v ) (KeyContext k v)
+type Location k v
+    = NodeLoc (Dict k v) (NodePath k v)
+    | KeyLoc ( k, v ) (KeyContext k v) (NodePath k v)
 
 
+{-| Represents the context surrounding a node within a tree.
+-}
+type NodePath k v
+    = Top
+    | Subnode (NodeContext k v) (NodePath k v)
+
+
+{-| Represents the context surrounding a subnode within a node.
+-}
 type NodeContext k v
     = N2A ( k, v ) (Dict k v)
     | N2B (Dict k v) ( k, v )
@@ -154,6 +165,8 @@ type NodeContext k v
     | N4D (Dict k v) ( k, v ) (Dict k v) ( k, v ) (Dict k v) ( k, v )
 
 
+{-| Represents the context surrounding a key within a node.
+-}
 type KeyContext k v
     = N2P1 (Dict k v) (Dict k v)
     | N3P1 (Dict k v) (Dict k v) ( k, v ) (Dict k v)
@@ -163,60 +176,64 @@ type KeyContext k v
     | N4P3 (Dict k v) ( k, v ) (Dict k v) ( k, v ) (Dict k v) (Dict k v)
 
 
-seek : comparable -> Dict comparable v -> Maybe (UnzippedNode comparable v)
-seek key node =
+seek : NodePath comparable v -> comparable -> Dict comparable v -> Location comparable v
+seek path key node =
     case node of
         Leaf ->
-            Nothing
+            NodeLoc node path
 
         N2 a (( k1, _ ) as p1) b ->
-            Just
-                (if key < k1 then
-                    NodeLoc a (N2A p1 b)
-                 else if key > k1 then
-                    NodeLoc b (N2B a p1)
-                 else
-                    KeyLoc p1 (N2P1 a b)
-                )
+            if key < k1 then
+                a |> seek (Subnode (N2A p1 b) path) key
+            else if key > k1 then
+                b |> seek (Subnode (N2B a p1) path) key
+            else
+                KeyLoc p1 (N2P1 a b) path
 
         N3 a (( k1, _ ) as p1) b (( k2, _ ) as p2) c ->
-            Just
-                (if key < k2 then
-                    if key < k1 then
-                        NodeLoc a (N3A p1 b p2 c)
-                    else if key > k1 then
-                        NodeLoc b (N3B a p1 p2 c)
-                    else
-                        KeyLoc p1 (N3P1 a b p2 c)
-                 else if key > k2 then
-                    NodeLoc c (N3C a p1 b p2)
-                 else
-                    KeyLoc p2 (N3P2 a p1 b c)
-                )
+            if key < k2 then
+                if key < k1 then
+                    a |> seek (Subnode (N3A p1 b p2 c) path) key
+                else if key > k1 then
+                    b |> seek (Subnode (N3B a p1 p2 c) path) key
+                else
+                    KeyLoc p1 (N3P1 a b p2 c) path
+            else if key > k2 then
+                c |> seek (Subnode (N3C a p1 b p2) path) key
+            else
+                KeyLoc p2 (N3P2 a p1 b c) path
 
         N4 a (( k1, _ ) as p1) b (( k2, _ ) as p2) c (( k3, _ ) as p3) d ->
-            Just
-                (if key < k2 then
-                    if key < k1 then
-                        NodeLoc a (N4A p1 b p2 c p3 d)
-                    else if key > k1 then
-                        NodeLoc b (N4B a p1 p2 c p3 d)
-                    else
-                        KeyLoc p1 (N4P1 a b p2 c p3 d)
-                 else if key > k2 then
-                    if key < k3 then
-                        NodeLoc c (N4C a p1 b p2 p3 d)
-                    else if key > k3 then
-                        NodeLoc d (N4D a p1 b p2 c p3)
-                    else
-                        KeyLoc p3 (N4P3 a p1 b p2 c d)
-                 else
-                    KeyLoc p2 (N4P2 a p1 b c p3 d)
-                )
+            if key < k2 then
+                if key < k1 then
+                    a |> seek (Subnode (N4A p1 b p2 c p3 d) path) key
+                else if key > k1 then
+                    b |> seek (Subnode (N4B a p1 p2 c p3 d) path) key
+                else
+                    KeyLoc p1 (N4P1 a b p2 c p3 d) path
+            else if key > k2 then
+                if key < k3 then
+                    c |> seek (Subnode (N4C a p1 b p2 p3 d) path) key
+                else if key > k3 then
+                    d |> seek (Subnode (N4D a p1 b p2 c p3) path) key
+                else
+                    KeyLoc p3 (N4P3 a p1 b p2 c d) path
+            else
+                KeyLoc p2 (N4P2 a p1 b c p3 d) path
 
 
-zipNodeLoc : Dict k v -> NodeContext k v -> Dict k v
-zipNodeLoc node nodeContext =
+zipNode : NodePath k v -> Dict k v -> Dict k v
+zipNode path node =
+    case path of
+        Top ->
+            node
+
+        Subnode nodeContext nextPath ->
+            node |> wrapNode nodeContext |> zipNode nextPath
+
+
+wrapNode : NodeContext k v -> Dict k v -> Dict k v
+wrapNode nodeContext node =
     case nodeContext of
         N2A p1 b ->
             N2 node p1 b
@@ -246,8 +263,8 @@ zipNodeLoc node nodeContext =
             N4 a p1 b p2 c p3 node
 
 
-zipKeyLoc : ( k, v ) -> KeyContext k v -> Dict k v
-zipKeyLoc pair keyContext =
+wrapKey : KeyContext k v -> ( k, v ) -> Dict k v
+wrapKey keyContext pair =
     case keyContext of
         N2P1 a b ->
             N2 a pair b
@@ -295,48 +312,26 @@ fromNodeResult nodeResult =
             subnode
 
 
-type RebalanceResult k v
-    = Rotated (Dict k v) ( k, v ) (Dict k v)
-    | Merged (Dict k v)
+zipNodeResult : NodePath comparable v -> NodeResult comparable v -> NodeResult comparable v
+zipNodeResult path nodeResult =
+    case path of
+        Top ->
+            nodeResult
+
+        Subnode nodeContext pathNext ->
+            case nodeResult of
+                Balanced node ->
+                    Balanced (node |> wrapNode nodeContext |> zipNode pathNext)
+
+                _ ->
+                    nodeResult |> wrapNodeResult nodeContext |> zipNodeResult pathNext
 
 
-rotateLeft : Dict k v -> ( k, v ) -> Dict k v -> RebalanceResult k v
-rotateLeft subnode pair right =
-    case right of
-        Leaf ->
-            Merged Leaf
-
-        N2 a p1 b ->
-            Merged (N3 subnode pair a p1 b)
-
-        N3 a p1 b p2 c ->
-            Rotated (N2 subnode pair a) p1 (N2 b p2 c)
-
-        N4 a p1 b p2 c p3 d ->
-            Rotated (N2 subnode pair a) p1 (N3 b p2 c p3 d)
-
-
-rotateRight : Dict k v -> ( k, v ) -> Dict k v -> RebalanceResult k v
-rotateRight left pair subnode =
-    case left of
-        Leaf ->
-            Merged Leaf
-
-        N2 a p1 b ->
-            Merged (N3 a p1 b pair subnode)
-
-        N3 a p1 b p2 c ->
-            Rotated (N2 a p1 b) p2 (N2 c pair subnode)
-
-        N4 a p1 b p2 c p3 d ->
-            Rotated (N3 a p1 b p2 c) p3 (N2 d pair subnode)
-
-
-zipNodeResult : NodeContext comparable v -> NodeResult comparable v -> NodeResult comparable v
-zipNodeResult nodeContext nodeResult =
+wrapNodeResult : NodeContext comparable v -> NodeResult comparable v -> NodeResult comparable v
+wrapNodeResult nodeContext nodeResult =
     case nodeResult of
         Balanced node ->
-            Balanced (zipNodeLoc node nodeContext)
+            Balanced (node |> wrapNode nodeContext)
 
         Split left pair right ->
             case nodeContext of
@@ -466,8 +461,8 @@ zipNodeResult nodeContext nodeResult =
                             Balanced (N3 a p1 b p2 cd)
 
 
-zipWithoutKey : KeyContext comparable v -> NodeResult comparable v
-zipWithoutKey keyContext =
+wrapWithoutKey : KeyContext comparable v -> NodeResult comparable v
+wrapWithoutKey keyContext =
     case keyContext of
         N2P1 a b ->
             case findReplacementKey a b of
@@ -518,6 +513,43 @@ zipWithoutKey keyContext =
                     Balanced (N3 a p1 b p2 cd)
 
 
+type RebalanceResult k v
+    = Rotated (Dict k v) ( k, v ) (Dict k v)
+    | Merged (Dict k v)
+
+
+rotateLeft : Dict k v -> ( k, v ) -> Dict k v -> RebalanceResult k v
+rotateLeft subnode pair right =
+    case right of
+        Leaf ->
+            Merged Leaf
+
+        N2 a p1 b ->
+            Merged (N3 subnode pair a p1 b)
+
+        N3 a p1 b p2 c ->
+            Rotated (N2 subnode pair a) p1 (N2 b p2 c)
+
+        N4 a p1 b p2 c p3 d ->
+            Rotated (N2 subnode pair a) p1 (N3 b p2 c p3 d)
+
+
+rotateRight : Dict k v -> ( k, v ) -> Dict k v -> RebalanceResult k v
+rotateRight left pair subnode =
+    case left of
+        Leaf ->
+            Merged Leaf
+
+        N2 a p1 b ->
+            Merged (N3 a p1 b pair subnode)
+
+        N3 a p1 b p2 c ->
+            Rotated (N2 a p1 b) p2 (N2 c pair subnode)
+
+        N4 a p1 b p2 c p3 d ->
+            Rotated (N3 a p1 b p2 c) p3 (N2 d pair subnode)
+
+
 findReplacementKey : Dict comparable v -> Dict comparable v -> RebalanceResult comparable v
 findReplacementKey left right =
     case borrowSmallest right of
@@ -532,7 +564,7 @@ findReplacementKey left right =
                 Nothing ->
                     case getSmallest Nothing right of
                         Just (( key, _ ) as pair) ->
-                            case removeHelp key right of
+                            case removeFromNode key right of
                                 Balanced newRight ->
                                     Rotated left pair newRight
 
@@ -633,23 +665,13 @@ getLargest largest node =
 
 
 insert : comparable -> v -> Dict comparable v -> Dict comparable v
-insert key val =
-    insertHelp ( key, val ) >> fromNodeResult
+insert key val dict =
+    case dict |> seek Top key of
+        NodeLoc _ path ->
+            Split Leaf ( key, val ) Leaf |> zipNodeResult path |> fromNodeResult
 
-
-insertHelp : ( comparable, v ) -> Dict comparable v -> NodeResult comparable v
-insertHelp (( key, _ ) as pair) node =
-    case seek key node of
-        Nothing ->
-            Split Leaf pair Leaf
-
-        Just loc ->
-            case loc of
-                NodeLoc subnode nodeContext ->
-                    zipNodeResult nodeContext (insertHelp pair subnode)
-
-                KeyLoc _ keyContext ->
-                    Balanced (zipKeyLoc pair keyContext)
+        KeyLoc _ keyContext path ->
+            ( key, val ) |> wrapKey keyContext |> zipNode path
 
 
 
@@ -658,22 +680,17 @@ insertHelp (( key, _ ) as pair) node =
 
 remove : comparable -> Dict comparable v -> Dict comparable v
 remove key =
-    removeHelp key >> fromNodeResult
+    removeFromNode key >> fromNodeResult
 
 
-removeHelp : comparable -> Dict comparable v -> NodeResult comparable v
-removeHelp key node =
-    case seek key node of
-        Nothing ->
+removeFromNode : comparable -> Dict comparable v -> NodeResult comparable v
+removeFromNode key node =
+    case node |> seek Top key of
+        NodeLoc _ _ ->
             Balanced node
 
-        Just loc ->
-            case loc of
-                NodeLoc subnode nodeContext ->
-                    zipNodeResult nodeContext (removeHelp key subnode)
-
-                KeyLoc _ keyContext ->
-                    zipWithoutKey keyContext
+        KeyLoc _ keyContext path ->
+            wrapWithoutKey keyContext |> zipNodeResult path
 
 
 
@@ -681,33 +698,23 @@ removeHelp key node =
 
 
 update : comparable -> (Maybe v -> Maybe v) -> Dict comparable v -> Dict comparable v
-update key f =
-    updateHelp key f >> fromNodeResult
-
-
-updateHelp : comparable -> (Maybe v -> Maybe v) -> Dict comparable v -> NodeResult comparable v
-updateHelp key f node =
-    case seek key node of
-        Nothing ->
+update key f dict =
+    case dict |> seek Top key of
+        NodeLoc _ path ->
             case f Nothing of
                 Just val ->
-                    Split Leaf ( key, val ) Leaf
+                    Split Leaf ( key, val ) Leaf |> zipNodeResult path |> fromNodeResult
 
                 Nothing ->
-                    Balanced node
+                    dict
 
-        Just loc ->
-            case loc of
-                NodeLoc subnode nodeContext ->
-                    zipNodeResult nodeContext (updateHelp key f subnode)
+        KeyLoc ( _, val ) keyContext path ->
+            case f (Just val) of
+                Just newVal ->
+                    ( key, newVal ) |> wrapKey keyContext |> zipNode path
 
-                KeyLoc ( _, val ) keyContext ->
-                    case f (Just val) of
-                        Just newVal ->
-                            Balanced (zipKeyLoc ( key, newVal ) keyContext)
-
-                        Nothing ->
-                            zipWithoutKey keyContext
+                Nothing ->
+                    wrapWithoutKey keyContext |> zipNodeResult path |> fromNodeResult
 
 
 
@@ -996,7 +1003,7 @@ removeRepeatsHelp revList (( key, _ ) as pair) list =
     case list of
         (( nextKey, _ ) as nextPair) :: rest ->
             if key == nextKey then
-                removeRepeatsHelp (revList) nextPair rest
+                removeRepeatsHelp revList nextPair rest
             else
                 removeRepeatsHelp (pair :: revList) nextPair rest
 
