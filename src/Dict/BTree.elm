@@ -136,7 +136,7 @@ member key node =
 
 
 {-| Represents a tree "unzipped" to the location of a specific node or key
-within a tree. This structure contains the node or key under focus as well as
+within a tree. A `Location` contains the node or key under focus as well as
 the context needed to "zip" the tree back up.
 -}
 type Location k v
@@ -176,46 +176,46 @@ type KeyContext k v
     | N4P3 (Dict k v) ( k, v ) (Dict k v) ( k, v ) (Dict k v) (Dict k v)
 
 
-seek : NodePath comparable v -> comparable -> Dict comparable v -> Location comparable v
-seek path key node =
+seek : comparable -> NodePath comparable v -> Dict comparable v -> Location comparable v
+seek key path node =
     case node of
         Leaf ->
             NodeLoc node path
 
         N2 a (( k1, _ ) as p1) b ->
             if key < k1 then
-                a |> seek (Subnode (N2A p1 b) path) key
+                a |> seek key (Subnode (N2A p1 b) path)
             else if key > k1 then
-                b |> seek (Subnode (N2B a p1) path) key
+                b |> seek key (Subnode (N2B a p1) path)
             else
                 KeyLoc p1 (N2P1 a b) path
 
         N3 a (( k1, _ ) as p1) b (( k2, _ ) as p2) c ->
             if key < k2 then
                 if key < k1 then
-                    a |> seek (Subnode (N3A p1 b p2 c) path) key
+                    a |> seek key (Subnode (N3A p1 b p2 c) path)
                 else if key > k1 then
-                    b |> seek (Subnode (N3B a p1 p2 c) path) key
+                    b |> seek key (Subnode (N3B a p1 p2 c) path)
                 else
                     KeyLoc p1 (N3P1 a b p2 c) path
             else if key > k2 then
-                c |> seek (Subnode (N3C a p1 b p2) path) key
+                c |> seek key (Subnode (N3C a p1 b p2) path)
             else
                 KeyLoc p2 (N3P2 a p1 b c) path
 
         N4 a (( k1, _ ) as p1) b (( k2, _ ) as p2) c (( k3, _ ) as p3) d ->
             if key < k2 then
                 if key < k1 then
-                    a |> seek (Subnode (N4A p1 b p2 c p3 d) path) key
+                    a |> seek key (Subnode (N4A p1 b p2 c p3 d) path)
                 else if key > k1 then
-                    b |> seek (Subnode (N4B a p1 p2 c p3 d) path) key
+                    b |> seek key (Subnode (N4B a p1 p2 c p3 d) path)
                 else
                     KeyLoc p1 (N4P1 a b p2 c p3 d) path
             else if key > k2 then
                 if key < k3 then
-                    c |> seek (Subnode (N4C a p1 b p2 p3 d) path) key
+                    c |> seek key (Subnode (N4C a p1 b p2 p3 d) path)
                 else if key > k3 then
-                    d |> seek (Subnode (N4D a p1 b p2 c p3) path) key
+                    d |> seek key (Subnode (N4D a p1 b p2 c p3) path)
                 else
                     KeyLoc p3 (N4P3 a p1 b p2 c d) path
             else
@@ -285,21 +285,19 @@ wrapKey keyContext pair =
             N4 a p1 b p2 c pair d
 
 
-{-| Represents the possible outcomes of modifying a node.
+{-| Represents the possible outcomes of inserting into a node.
 -}
-type NodeResult k v
-    = Balanced (Dict k v)
+type InsertResult k v
+    = BalancedInsert (Dict k v)
     | Split (Dict k v) ( k, v ) (Dict k v)
-    | Underfull (Dict k v)
 
 
-{-| This is the only function that changes the depth of the tree; it's to be
-used only at the root.
+{-| May change the depth of the tree.
 -}
-fromNodeResult : NodeResult k v -> Dict k v
-fromNodeResult nodeResult =
+fromInsertResult : InsertResult k v -> Dict k v
+fromInsertResult nodeResult =
     case nodeResult of
-        Balanced node ->
+        BalancedInsert node ->
             -- maintains depth
             node
 
@@ -307,48 +305,44 @@ fromNodeResult nodeResult =
             -- increases depth
             N2 left pair right
 
-        Underfull subnode ->
-            -- decreases depth
-            subnode
 
-
-zipNodeResult : NodePath comparable v -> NodeResult comparable v -> NodeResult comparable v
-zipNodeResult path nodeResult =
+zipInsertResult : NodePath comparable v -> InsertResult comparable v -> InsertResult comparable v
+zipInsertResult path nodeResult =
     case path of
         Top ->
             nodeResult
 
         Subnode nodeContext pathNext ->
             case nodeResult of
-                Balanced node ->
-                    Balanced (node |> wrapNode nodeContext |> zipNode pathNext)
+                BalancedInsert node ->
+                    BalancedInsert (node |> wrapNode nodeContext |> zipNode pathNext)
 
                 _ ->
-                    nodeResult |> wrapNodeResult nodeContext |> zipNodeResult pathNext
+                    nodeResult |> wrapInsertResult nodeContext |> zipInsertResult pathNext
 
 
-wrapNodeResult : NodeContext comparable v -> NodeResult comparable v -> NodeResult comparable v
-wrapNodeResult nodeContext nodeResult =
+wrapInsertResult : NodeContext comparable v -> InsertResult comparable v -> InsertResult comparable v
+wrapInsertResult nodeContext nodeResult =
     case nodeResult of
-        Balanced node ->
-            Balanced (node |> wrapNode nodeContext)
+        BalancedInsert node ->
+            BalancedInsert (node |> wrapNode nodeContext)
 
         Split left pair right ->
             case nodeContext of
                 N2A p1 b ->
-                    Balanced (N3 left pair right p1 b)
+                    BalancedInsert (N3 left pair right p1 b)
 
                 N2B a p1 ->
-                    Balanced (N3 a p1 left pair right)
+                    BalancedInsert (N3 a p1 left pair right)
 
                 N3A p1 b p2 c ->
-                    Balanced (N4 left pair right p1 b p2 c)
+                    BalancedInsert (N4 left pair right p1 b p2 c)
 
                 N3B a p1 p2 c ->
-                    Balanced (N4 a p1 left pair right p2 c)
+                    BalancedInsert (N4 a p1 left pair right p2 c)
 
                 N3C a p1 b p2 ->
-                    Balanced (N4 a p1 b p2 left pair right)
+                    BalancedInsert (N4 a p1 b p2 left pair right)
 
                 N4A p1 b p2 c p3 d ->
                     Split (N3 left pair right p1 b) p2 (N2 c p3 d)
@@ -362,13 +356,56 @@ wrapNodeResult nodeContext nodeResult =
                 N4D a p1 b p2 c p3 ->
                     Split (N3 a p1 b p2 c) p3 (N2 left pair right)
 
+
+{-| Represents the possible outcomes of removing from a node.
+-}
+type RemoveResult k v
+    = BalancedRemove (Dict k v)
+    | Underfull (Dict k v)
+
+
+{-| May change the depth of the tree.
+-}
+fromRemoveResult : RemoveResult k v -> Dict k v
+fromRemoveResult nodeResult =
+    case nodeResult of
+        BalancedRemove node ->
+            -- maintains depth
+            node
+
+        Underfull subnode ->
+            -- decreases depth
+            subnode
+
+
+zipRemoveResult : NodePath comparable v -> RemoveResult comparable v -> RemoveResult comparable v
+zipRemoveResult path nodeResult =
+    case path of
+        Top ->
+            nodeResult
+
+        Subnode nodeContext pathNext ->
+            case nodeResult of
+                BalancedRemove node ->
+                    BalancedRemove (node |> wrapNode nodeContext |> zipNode pathNext)
+
+                _ ->
+                    nodeResult |> wrapRemoveResult nodeContext |> zipRemoveResult pathNext
+
+
+wrapRemoveResult : NodeContext comparable v -> RemoveResult comparable v -> RemoveResult comparable v
+wrapRemoveResult nodeContext nodeResult =
+    case nodeResult of
+        BalancedRemove node ->
+            BalancedRemove (node |> wrapNode nodeContext)
+
         Underfull subnode ->
             case nodeContext of
                 N2A p1 b ->
                     -- leftmost
                     case rotateLeft subnode p1 b of
                         Rotated newA newP1 newB ->
-                            Balanced (N2 newA newP1 newB)
+                            BalancedRemove (N2 newA newP1 newB)
 
                         Merged ab ->
                             Underfull ab
@@ -377,7 +414,7 @@ wrapNodeResult nodeContext nodeResult =
                     -- rightmost
                     case rotateRight a p1 subnode of
                         Rotated newA newP1 newB ->
-                            Balanced (N2 newA newP1 newB)
+                            BalancedRemove (N2 newA newP1 newB)
 
                         Merged ab ->
                             Underfull ab
@@ -386,88 +423,88 @@ wrapNodeResult nodeContext nodeResult =
                     -- leftmost
                     case rotateLeft subnode p1 b of
                         Rotated newA newP1 newB ->
-                            Balanced (N3 newA newP1 newB p2 c)
+                            BalancedRemove (N3 newA newP1 newB p2 c)
 
                         Merged ab ->
-                            Balanced (N2 ab p2 c)
+                            BalancedRemove (N2 ab p2 c)
 
                 N3B a p1 p2 c ->
                     -- middle
                     case rotateLeft subnode p2 c of
                         Rotated newB newP2 newC ->
-                            Balanced (N3 a p1 newB newP2 newC)
+                            BalancedRemove (N3 a p1 newB newP2 newC)
 
                         _ ->
                             case rotateRight a p1 subnode of
                                 Rotated newA newP1 newB ->
-                                    Balanced (N3 newA newP1 newB p2 c)
+                                    BalancedRemove (N3 newA newP1 newB p2 c)
 
                                 Merged ab ->
-                                    Balanced (N2 ab p2 c)
+                                    BalancedRemove (N2 ab p2 c)
 
                 N3C a p1 b p2 ->
                     -- rightmost
                     case rotateRight b p2 subnode of
                         Rotated newB newP2 newC ->
-                            Balanced (N3 a p1 newB newP2 newC)
+                            BalancedRemove (N3 a p1 newB newP2 newC)
 
                         Merged bc ->
-                            Balanced (N2 a p1 bc)
+                            BalancedRemove (N2 a p1 bc)
 
                 N4A p1 b p2 c p3 d ->
                     -- leftmost
                     case rotateLeft subnode p1 b of
                         Rotated newA newP1 newB ->
-                            Balanced (N4 newA newP1 newB p2 c p3 d)
+                            BalancedRemove (N4 newA newP1 newB p2 c p3 d)
 
                         Merged ab ->
-                            Balanced (N3 ab p2 c p3 d)
+                            BalancedRemove (N3 ab p2 c p3 d)
 
                 N4B a p1 p2 c p3 d ->
                     -- middle
                     case rotateLeft subnode p2 c of
                         Rotated newB newP2 newC ->
-                            Balanced (N4 a p1 newB newP2 newC p3 d)
+                            BalancedRemove (N4 a p1 newB newP2 newC p3 d)
 
                         _ ->
                             case rotateRight a p1 subnode of
                                 Rotated newA newP1 newB ->
-                                    Balanced (N4 newA newP1 newB p2 c p3 d)
+                                    BalancedRemove (N4 newA newP1 newB p2 c p3 d)
 
                                 Merged ab ->
-                                    Balanced (N3 ab p2 c p3 d)
+                                    BalancedRemove (N3 ab p2 c p3 d)
 
                 N4C a p1 b p2 p3 d ->
                     -- middle
                     case rotateLeft subnode p3 d of
                         Rotated newC newP3 newD ->
-                            Balanced (N4 a p1 b p2 newC newP3 newD)
+                            BalancedRemove (N4 a p1 b p2 newC newP3 newD)
 
                         _ ->
                             case rotateRight b p2 subnode of
                                 Rotated newB newP2 newC ->
-                                    Balanced (N4 a p1 newB newP2 newC p3 d)
+                                    BalancedRemove (N4 a p1 newB newP2 newC p3 d)
 
                                 Merged bc ->
-                                    Balanced (N3 a p1 bc p3 d)
+                                    BalancedRemove (N3 a p1 bc p3 d)
 
                 N4D a p1 b p2 c p3 ->
                     -- rightmost
                     case rotateRight c p3 subnode of
                         Rotated newC newP3 newD ->
-                            Balanced (N4 a p1 b p2 newC newP3 newD)
+                            BalancedRemove (N4 a p1 b p2 newC newP3 newD)
 
                         Merged cd ->
-                            Balanced (N3 a p1 b p2 cd)
+                            BalancedRemove (N3 a p1 b p2 cd)
 
 
-wrapWithoutKey : KeyContext comparable v -> NodeResult comparable v
+wrapWithoutKey : KeyContext comparable v -> RemoveResult comparable v
 wrapWithoutKey keyContext =
     case keyContext of
         N2P1 a b ->
             case findReplacementKey a b of
                 Rotated newA newP1 newB ->
-                    Balanced (N2 newA newP1 newB)
+                    BalancedRemove (N2 newA newP1 newB)
 
                 Merged ab ->
                     Underfull ab
@@ -475,42 +512,42 @@ wrapWithoutKey keyContext =
         N3P1 a b p2 c ->
             case findReplacementKey a b of
                 Rotated newA newP1 newB ->
-                    Balanced (N3 newA newP1 newB p2 c)
+                    BalancedRemove (N3 newA newP1 newB p2 c)
 
                 Merged ab ->
-                    Balanced (N2 ab p2 c)
+                    BalancedRemove (N2 ab p2 c)
 
         N3P2 a p1 b c ->
             case findReplacementKey b c of
                 Rotated newB newP2 newC ->
-                    Balanced (N3 a p1 newB newP2 newC)
+                    BalancedRemove (N3 a p1 newB newP2 newC)
 
                 Merged bc ->
-                    Balanced (N2 a p1 bc)
+                    BalancedRemove (N2 a p1 bc)
 
         N4P1 a b p2 c p3 d ->
             case findReplacementKey a b of
                 Rotated newA newP1 newB ->
-                    Balanced (N4 newA newP1 newB p2 c p3 d)
+                    BalancedRemove (N4 newA newP1 newB p2 c p3 d)
 
                 Merged ab ->
-                    Balanced (N3 ab p2 c p3 d)
+                    BalancedRemove (N3 ab p2 c p3 d)
 
         N4P2 a p1 b c p3 d ->
             case findReplacementKey b c of
                 Rotated newB newP2 newC ->
-                    Balanced (N4 a p1 newB newP2 newC p3 d)
+                    BalancedRemove (N4 a p1 newB newP2 newC p3 d)
 
                 Merged bc ->
-                    Balanced (N3 a p1 bc p3 d)
+                    BalancedRemove (N3 a p1 bc p3 d)
 
         N4P3 a p1 b p2 c d ->
             case findReplacementKey c d of
                 Rotated newC newP3 newD ->
-                    Balanced (N4 a p1 b p2 newC newP3 newD)
+                    BalancedRemove (N4 a p1 b p2 newC newP3 newD)
 
                 Merged cd ->
-                    Balanced (N3 a p1 b p2 cd)
+                    BalancedRemove (N3 a p1 b p2 cd)
 
 
 type RebalanceResult k v
@@ -565,14 +602,11 @@ findReplacementKey left right =
                     case getSmallest Nothing right of
                         Just (( key, _ ) as pair) ->
                             case removeFromNode key right of
-                                Balanced newRight ->
+                                BalancedRemove newRight ->
                                     Rotated left pair newRight
 
                                 Underfull rightSubnode ->
                                     rotateRight left pair rightSubnode
-
-                                Split _ _ _ ->
-                                    Debug.crash "remove can't result in a split"
 
                         Nothing ->
                             Merged Leaf
@@ -666,9 +700,9 @@ getLargest largest node =
 
 insert : comparable -> v -> Dict comparable v -> Dict comparable v
 insert key val dict =
-    case dict |> seek Top key of
+    case dict |> seek key Top of
         NodeLoc _ path ->
-            Split Leaf ( key, val ) Leaf |> zipNodeResult path |> fromNodeResult
+            Split Leaf ( key, val ) Leaf |> zipInsertResult path |> fromInsertResult
 
         KeyLoc _ keyContext path ->
             ( key, val ) |> wrapKey keyContext |> zipNode path
@@ -680,17 +714,17 @@ insert key val dict =
 
 remove : comparable -> Dict comparable v -> Dict comparable v
 remove key =
-    removeFromNode key >> fromNodeResult
+    removeFromNode key >> fromRemoveResult
 
 
-removeFromNode : comparable -> Dict comparable v -> NodeResult comparable v
+removeFromNode : comparable -> Dict comparable v -> RemoveResult comparable v
 removeFromNode key node =
-    case node |> seek Top key of
+    case node |> seek key Top of
         NodeLoc _ _ ->
-            Balanced node
+            BalancedRemove node
 
         KeyLoc _ keyContext path ->
-            wrapWithoutKey keyContext |> zipNodeResult path
+            wrapWithoutKey keyContext |> zipRemoveResult path
 
 
 
@@ -699,11 +733,11 @@ removeFromNode key node =
 
 update : comparable -> (Maybe v -> Maybe v) -> Dict comparable v -> Dict comparable v
 update key f dict =
-    case dict |> seek Top key of
+    case dict |> seek key Top of
         NodeLoc _ path ->
             case f Nothing of
                 Just val ->
-                    Split Leaf ( key, val ) Leaf |> zipNodeResult path |> fromNodeResult
+                    Split Leaf ( key, val ) Leaf |> zipInsertResult path |> fromInsertResult
 
                 Nothing ->
                     dict
@@ -714,7 +748,7 @@ update key f dict =
                     ( key, newVal ) |> wrapKey keyContext |> zipNode path
 
                 Nothing ->
-                    wrapWithoutKey keyContext |> zipNodeResult path |> fromNodeResult
+                    wrapWithoutKey keyContext |> zipRemoveResult path |> fromRemoveResult
 
 
 
