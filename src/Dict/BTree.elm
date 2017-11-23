@@ -1,28 +1,28 @@
 module Dict.BTree
     exposing
         ( Dict(..)
+        , diff
         , empty
-        , singleton
-        , isEmpty
-        , size
-        , get
-        , member
-        , insert
-        , remove
-        , update
-        , map
+        , filter
         , foldl
         , foldr
-        , filter
-        , partition
-        , union
-        , intersect
-        , diff
-        , merge
-        , keys
-        , values
         , fromList
+        , get
+        , insert
+        , intersect
+        , isEmpty
+        , keys
+        , map
+        , member
+        , merge
+        , partition
+        , remove
+        , singleton
+        , size
         , toList
+        , union
+        , update
+        , values
         )
 
 {-| Order-4 B-tree
@@ -993,7 +993,7 @@ merge accLeft accBoth accRight left right result0 =
                     else
                         ( accRight rKey rVal result, rRest ) |> accumulate lKey lVal
     in
-        foldl accumulate ( result0, toList right ) left |> uncurry (List.foldl (uncurry accRight))
+    foldl accumulate ( result0, toList right ) left |> uncurry (List.foldl (uncurry accRight))
 
 
 

@@ -3,7 +3,7 @@ module Tests exposing (..)
 import Char
 import Dict.BTree as Dict exposing (Dict(..))
 import Expect
-import Test exposing (Test, test, describe)
+import Test exposing (Test, describe, test)
 
 
 isValidTest : Test
@@ -144,21 +144,21 @@ get =
         dict =
             letters |> stringToPairs |> Dict.fromList
     in
-        describe "get"
-            [ test "returns Just values for all its keys" <|
-                \() ->
-                    letters
-                        |> String.toList
-                        |> List.filterMap (\c -> Dict.get c dict)
-                        |> String.fromList
-                        |> Expect.equal (letters |> String.toLower)
-            , test "returns Nothing for keys it doesn't have" <|
-                \() ->
-                    "0123456789"
-                        |> String.toList
-                        |> List.filterMap (\c -> Dict.get c dict)
-                        |> Expect.equal []
-            ]
+    describe "get"
+        [ test "returns Just values for all its keys" <|
+            \() ->
+                letters
+                    |> String.toList
+                    |> List.filterMap (\c -> Dict.get c dict)
+                    |> String.fromList
+                    |> Expect.equal (letters |> String.toLower)
+        , test "returns Nothing for keys it doesn't have" <|
+            \() ->
+                "0123456789"
+                    |> String.toList
+                    |> List.filterMap (\c -> Dict.get c dict)
+                    |> Expect.equal []
+        ]
 
 
 remove : Test
@@ -167,30 +167,30 @@ remove =
         dict =
             dictRange 1 100
     in
-        describe "remove"
-            [ test "removes a pair by key" <|
-                \() ->
-                    ([ ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
-                        |> Dict.remove 1
-                        |> Expect.equal ([ ( 2, 'B' ) ] |> Dict.fromList)
-            , test "doesn't alter the dict when key isn't found" <|
-                \() ->
-                    ([ ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
-                        |> Dict.remove 3
-                        |> Expect.equal ([ ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
-            , describe "maintains invariants"
-                (List.range 1 100
-                    |> List.map
-                        (\n ->
-                            test ("at size " ++ toString n) <|
-                                \() ->
-                                    List.range 1 n
-                                        |> List.foldr Dict.remove dict
-                                        |> isValid
-                                        |> Expect.true "broken invariant"
-                        )
-                )
-            ]
+    describe "remove"
+        [ test "removes a pair by key" <|
+            \() ->
+                ([ ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
+                    |> Dict.remove 1
+                    |> Expect.equal ([ ( 2, 'B' ) ] |> Dict.fromList)
+        , test "doesn't alter the dict when key isn't found" <|
+            \() ->
+                ([ ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
+                    |> Dict.remove 3
+                    |> Expect.equal ([ ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
+        , describe "maintains invariants"
+            (List.range 1 100
+                |> List.map
+                    (\n ->
+                        test ("at size " ++ toString n) <|
+                            \() ->
+                                List.range 1 n
+                                    |> List.foldr Dict.remove dict
+                                    |> isValid
+                                    |> Expect.true "broken invariant"
+                    )
+            )
+        ]
 
 
 update : Test
@@ -321,40 +321,40 @@ merge =
         skip_ _ _ _ list =
             list
     in
-        describe "merge"
-            [ test "union" <|
-                \() ->
-                    (Dict.merge take take_ take (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
-                        |> Expect.equal (List.range 1 15)
-            , test "empty" <|
-                \() ->
-                    (Dict.merge skip skip_ skip (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
-                        |> Expect.equal []
-            , test "intersection" <|
-                \() ->
-                    (Dict.merge skip take_ skip (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
-                        |> Expect.equal (List.range 6 10)
-            , test "symmetric difference" <|
-                \() ->
-                    (Dict.merge take skip_ take (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
-                        |> Expect.equal (List.range 1 5 ++ List.range 11 15)
-            , test "left complement" <|
-                \() ->
-                    (Dict.merge skip skip_ take (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
-                        |> Expect.equal (List.range 11 15)
-            , test "right complement" <|
-                \() ->
-                    (Dict.merge take skip_ skip (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
-                        |> Expect.equal (List.range 1 5)
-            , test "left" <|
-                \() ->
-                    (Dict.merge take take_ skip (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
-                        |> Expect.equal (List.range 1 10)
-            , test "right" <|
-                \() ->
-                    (Dict.merge skip take_ take (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
-                        |> Expect.equal (List.range 6 15)
-            ]
+    describe "merge"
+        [ test "union" <|
+            \() ->
+                (Dict.merge take take_ take (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+                    |> Expect.equal (List.range 1 15)
+        , test "empty" <|
+            \() ->
+                (Dict.merge skip skip_ skip (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+                    |> Expect.equal []
+        , test "intersection" <|
+            \() ->
+                (Dict.merge skip take_ skip (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+                    |> Expect.equal (List.range 6 10)
+        , test "symmetric difference" <|
+            \() ->
+                (Dict.merge take skip_ take (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+                    |> Expect.equal (List.range 1 5 ++ List.range 11 15)
+        , test "left complement" <|
+            \() ->
+                (Dict.merge skip skip_ take (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+                    |> Expect.equal (List.range 11 15)
+        , test "right complement" <|
+            \() ->
+                (Dict.merge take skip_ skip (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+                    |> Expect.equal (List.range 1 5)
+        , test "left" <|
+            \() ->
+                (Dict.merge take take_ skip (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+                    |> Expect.equal (List.range 1 10)
+        , test "right" <|
+            \() ->
+                (Dict.merge skip take_ take (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
+                    |> Expect.equal (List.range 6 15)
+        ]
 
 
 
