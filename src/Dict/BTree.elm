@@ -1017,33 +1017,35 @@ toList =
 
 fromList : List ( comparable, v ) -> Dict comparable v
 fromList list =
-    if isSorted list then
-        fromSortedList True list
-    else
-        List.foldl (\( k, v ) dict -> insert k v dict) empty list
-
-
-isSorted : List ( comparable, v ) -> Bool
-isSorted list =
     case list of
-        ( k, _ ) :: rest ->
-            isSortedHelp k rest
+        pair :: rest ->
+            let
+                ( sorted, remainder ) =
+                    splitSortedHelp [] pair rest
+            in
+            List.foldl
+                (\( k, v ) dict -> insert k v dict)
+                (sorted |> fromSortedList False)
+                remainder
 
         [] ->
-            True
+            empty
 
 
-isSortedHelp : comparable -> List ( comparable, v ) -> Bool
-isSortedHelp k1 list =
+{-| Split a list into its sorted prefix and the remainder. The sorted prefix
+is returned in reversed order.
+-}
+splitSortedHelp : List ( comparable, v ) -> ( comparable, v ) -> List ( comparable, v ) -> ( List ( comparable, v ), List ( comparable, v ) )
+splitSortedHelp sorted (( k1, _ ) as p1) list =
     case list of
-        ( k2, _ ) :: rest ->
+        (( k2, _ ) as p2) :: rest ->
             if k1 < k2 then
-                isSortedHelp k2 rest
+                splitSortedHelp (p1 :: sorted) p2 rest
             else
-                False
+                ( sorted, p1 :: list )
 
         [] ->
-            True
+            ( p1 :: sorted, [] )
 
 
 {-| Convert an association list with sorted and distinct keys into a dictionary.
