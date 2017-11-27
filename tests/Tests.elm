@@ -97,6 +97,28 @@ foldr =
         ]
 
 
+keys : Test
+keys =
+    describe "keys"
+        [ test "returns a sorted list of keys" <|
+            \() ->
+                ("CSDTAMPIBWNGURKEHOLJYQZFXV" |> stringToPairs |> List.foldl (uncurry Dict.insert) Dict.empty)
+                    |> Dict.keys
+                    |> Expect.equal ("ABCDEFGHIJKLMNOPQRSTUVWXYZ" |> String.toList)
+        ]
+
+
+values : Test
+values =
+    describe "values"
+        [ test "returns a sorted list of values" <|
+            \() ->
+                ("CSDTAMPIBWNGURKEHOLJYQZFXV" |> stringToPairs |> List.foldl (uncurry Dict.insert) Dict.empty)
+                    |> Dict.values
+                    |> Expect.equal ("abcdefghijklmnopqrstuvwxyz" |> String.toList)
+        ]
+
+
 toList : Test
 toList =
     describe "toList"
@@ -118,9 +140,12 @@ fromList =
                     ("CSDTAMPIBWNGURKEHOLJYQZFXV" |> stringToPairs |> Dict.fromList |> Dict.toList)
         , test "doesn't insert duplicate keys" <|
             \() ->
-                Expect.equal
-                    ([ ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
-                    ([ ( 1, 'A' ), ( 2, 'B' ), ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
+                ([ ( 1, 'A' ), ( 2, 'B' ), ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
+                    |> Expect.equal ([ ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
+        , test "uses the last value among multiple pairs having the same key" <|
+            \() ->
+                ([ ( 1, 'A' ), ( 1, 'B' ), ( 1, 'C' ), ( 1, 'D' ), ( 1, 'E' ), ( 1, 'F' ) ] |> Dict.fromList)
+                    |> Expect.equal ([ ( 1, 'F' ) ] |> Dict.fromList)
         , describe "maintains invariants"
             (List.range 1 100
                 |> List.map
@@ -132,6 +157,23 @@ fromList =
                                     |> Expect.true "broken invariant"
                     )
             )
+        ]
+
+
+size : Test
+size =
+    describe "size"
+        [ test "returns the number of pairs in a dict" <|
+            \() ->
+                ("CSDTAMPIBWNGURKEHOLJYQZFXV" |> stringToPairs |> List.foldl (uncurry Dict.insert) Dict.empty)
+                    |> Dict.size
+                    |> Expect.equal 26
+        , test "empty" <|
+            \() ->
+                Dict.size Dict.empty |> Expect.equal 0
+        , test "singleton" <|
+            \() ->
+                Dict.size (Dict.singleton "" "") |> Expect.equal 1
         ]
 
 
@@ -196,22 +238,22 @@ remove =
 update : Test
 update =
     describe "update"
-        [ test "insert" <|
+        [ test "can insert" <|
             \() ->
                 ([ ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
                     |> Dict.update 3 (\_ -> Just 'C')
                     |> Expect.equal ([ ( 1, 'A' ), ( 2, 'B' ), ( 3, 'C' ) ] |> Dict.fromList)
-        , test "replace value" <|
+        , test "can replace values" <|
             \() ->
                 ([ ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
                     |> Dict.update 2 (\_ -> Just 'C')
                     |> Expect.equal ([ ( 1, 'A' ), ( 2, 'C' ) ] |> Dict.fromList)
-        , test "remove" <|
+        , test "can remove" <|
             \() ->
                 ([ ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
                     |> Dict.update 2 (\_ -> Nothing)
                     |> Expect.equal ([ ( 1, 'A' ) ] |> Dict.fromList)
-        , test "no change" <|
+        , test "may do nothing" <|
             \() ->
                 ([ ( 1, 'A' ), ( 2, 'B' ) ] |> Dict.fromList)
                     |> Dict.update 3 (\_ -> Nothing)
@@ -354,6 +396,46 @@ merge =
             \() ->
                 (Dict.merge skip take_ take (dictRange 1 10) (dictRange 6 15) [] |> List.reverse)
                     |> Expect.equal (List.range 6 15)
+        ]
+
+
+filter : Test
+filter =
+    let
+        isEven n =
+            n % 2 == 0
+    in
+    describe "filter"
+        [ test "removes as expected" <|
+            \() ->
+                (Dict.filter (isEven >> always) (dictRange 1 100) |> Dict.keys)
+                    |> Expect.equal (List.range 1 100 |> List.filter isEven)
+        , test "may do nothing" <|
+            \() ->
+                (Dict.filter (always True >> always) (dictRange 1 100) |> Dict.keys)
+                    |> Expect.equal (List.range 1 100)
+        ]
+
+
+partition : Test
+partition =
+    let
+        isEven n =
+            n % 2 == 0
+    in
+    describe "partition"
+        [ test "partitions as expected" <|
+            \() ->
+                (Dict.partition (isEven >> always) (dictRange 1 100) |> (\( a, b ) -> ( Dict.keys a, Dict.keys b )))
+                    |> Expect.equal (List.range 1 100 |> List.partition isEven)
+        , test "all left" <|
+            \() ->
+                (Dict.partition (always True >> always) (dictRange 1 100) |> (\( a, b ) -> ( Dict.keys a, Dict.keys b )))
+                    |> Expect.equal ( List.range 1 100, [] )
+        , test "all right" <|
+            \() ->
+                (Dict.partition (always False >> always) (dictRange 1 100) |> (\( a, b ) -> ( Dict.keys a, Dict.keys b )))
+                    |> Expect.equal ( [], List.range 1 100 )
         ]
 
 
